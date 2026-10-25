@@ -289,7 +289,8 @@
     { id: "kartu-stok", menu: "Kartu stok", judul: "Kartu stok", info: "Riwayat mutasi dan saldo berjalan per obat." },
     { id: "stok", menu: "Stok dan batch", judul: "Stok dan batch", info: "Stok per batch dengan penanda ED." },
     { id: "laporan", menu: "Laporan LPLPO", judul: "Laporan LPLPO", info: "Susun laporan bulanan dan ekspor ke Excel." },
-    { id: "master", menu: "Master data", judul: "Master data", render: renderMaster }
+    { id: "master", menu: "Master data", judul: "Master data", render: renderMaster },
+    { id: "pengaturan", menu: "Pengaturan", judul: "Pengaturan", info: "Preferensi tampilan, profil, dan konfigurasi aplikasi." }
   ];
 
   DAFTAR_HALAMAN.forEach(function (h) {
@@ -329,6 +330,45 @@
   }
 
   document.getElementById("keluar").addEventListener("click", keLogin);
+
+  // ---------- Drawer HP ----------
+  var menuNav    = document.getElementById("menu-nav");
+  var overlay    = document.getElementById("drawer-overlay");
+  var bukaTombol = document.getElementById("buka-drawer");
+  var tutupTombol = document.getElementById("tutup-drawer");
+
+  function bukaDrawer() {
+    menuNav.classList.add("terbuka");
+    overlay.classList.add("aktif");
+    overlay.setAttribute("aria-hidden", "false");
+    bukaTombol.setAttribute("aria-expanded", "true");
+    tutupTombol.focus();
+    document.body.style.overflow = "hidden";
+  }
+
+  function tutupDrawer() {
+    menuNav.classList.remove("terbuka");
+    overlay.classList.remove("aktif");
+    overlay.setAttribute("aria-hidden", "true");
+    bukaTombol.setAttribute("aria-expanded", "false");
+    bukaTombol.focus();
+    document.body.style.overflow = "";
+  }
+
+  bukaTombol.addEventListener("click", bukaDrawer);
+  tutupTombol.addEventListener("click", tutupDrawer);
+  overlay.addEventListener("click", tutupDrawer);
+
+  // Tekan Escape juga menutup drawer
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && menuNav.classList.contains("terbuka")) tutupDrawer();
+  });
+
+  // Klik item menu di HP: tutup drawer dulu, baru pindah halaman
+  menu.addEventListener("click", function (e) {
+    var a = e.target.closest("a");
+    if (a && menuNav.classList.contains("terbuka")) tutupDrawer();
+  });
 
   var sesi = LPLPO.sesi();
   if (!sesi) {

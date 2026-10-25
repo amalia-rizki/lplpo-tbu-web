@@ -12,10 +12,21 @@
 </head>
 <body>
 <div class="app">
-  <nav class="menu" aria-label="Menu utama">
-    <div class="merek">
-      <div class="nama">LPLPO TBU</div>
-      <div class="pudar">Puskesmas Tambang Ulang</div>
+  <!-- Overlay drawer (HP) -->
+  <div class="drawer-overlay" id="drawer-overlay" aria-hidden="true"></div>
+
+  <nav class="menu" id="menu-nav" aria-label="Menu utama">
+    <div class="menu-kepala">
+      <div class="merek">
+        <div class="nama">LPLPO TBU</div>
+        <div class="pudar">Puskesmas Tambang Ulang</div>
+      </div>
+      <!-- Tombol tutup drawer (HP) -->
+      <button type="button" class="btn-tutup-drawer" id="tutup-drawer" aria-label="Tutup menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </div>
     <div class="daftar-menu" id="menu"></div>
     <div class="menu-bawah">
@@ -25,6 +36,16 @@
   </nav>
 
   <main class="konten">
+    <!-- Header bar HP: tombol hamburger + nama app -->
+    <header class="app-header" aria-label="Header aplikasi">
+      <button type="button" class="btn-hamburger" id="buka-drawer" aria-expanded="false" aria-controls="menu-nav" aria-label="Buka menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/>
+        </svg>
+      </button>
+      <span class="header-nama">LPLPO TBU</span>
+    </header>
+
     <div class="batas" id="isi" aria-live="polite"></div>
   </main>
 </div>

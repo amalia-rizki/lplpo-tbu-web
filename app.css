@@ -1,8 +1,10 @@
 /* Tambahan khusus aplikasi di atas tema.css */
 
-/* Menu */
+/* Menu samping (desktop) */
 .merek .nama { font-size: 22px; font-weight: 800; line-height: 1.2; color: var(--hijau-teks); }
 .merek { padding: 0 14px; }
+.menu-kepala { display: flex; align-items: flex-start; justify-content: space-between; }
+.btn-tutup-drawer { display: none; } /* hanya tampil di HP */
 .daftar-menu { display: flex; flex-direction: column; gap: 2px; }
 .menu-bawah { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 0 14px; }
 .menu-bawah .btn-teks { align-self: flex-start; padding: 0; }
@@ -12,6 +14,9 @@
   font-size: 14px; font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center;
 }
+
+/* Header bar HP (hamburger + nama) — tersembunyi di desktop */
+.app-header { display: none; }
 
 /* Halaman */
 .judul-halaman { display: flex; flex-direction: column; gap: 6px; }
@@ -30,7 +35,7 @@
 
 /* Halaman login */
 .login-bungkus {
-  min-height: 100vh; min-height: 100dvh;   /* dvh: tinggi layar yang terlihat, tanpa bilah alamat HP */
+  min-height: 100vh; min-height: 100dvh;
   display: flex; align-items: flex-start; justify-content: center;
   padding: clamp(24px, 12vh, 112px) 24px 24px;
 }
@@ -46,11 +51,64 @@
 .pesan.galat { color: var(--bahaya); font-weight: 600; }
 .pesan.info { color: var(--tinta-pudar); }
 
+/* ===== HP: drawer dari kiri ===== */
 @media (max-width: 720px) {
-  .merek { padding: 0; flex: 0 0 auto; }
-  .daftar-menu { flex-direction: row; gap: 4px; }
-  .menu a { white-space: nowrap; }
-  .menu-bawah { margin: 0; padding: 0; flex: 0 0 auto; }
+  /* Header bar */
+  .app-header {
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: 0; z-index: 20;
+    background: var(--kartu); border-bottom: 1px solid var(--garis);
+    padding: 0 16px; height: 56px;
+  }
+  .btn-hamburger {
+    display: flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; padding: 0;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--tinta); border-radius: var(--radius); flex-shrink: 0;
+  }
+  .btn-hamburger:focus-visible { outline: 3px solid var(--hijau-teks); outline-offset: 2px; }
+  .header-nama { font-size: 18px; font-weight: 800; color: var(--hijau-teks); }
+
+  /* Overlay gelap di belakang drawer */
+  .drawer-overlay {
+    display: none; position: fixed; inset: 0; z-index: 29;
+    background: rgba(0,0,0,.45);
+  }
+  .drawer-overlay.aktif { display: block; }
+
+  /* Drawer geser dari kiri */
+  .menu {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 30;
+    width: 280px; max-width: 85vw;
+    flex-direction: column; flex-wrap: nowrap;
+    border-right: 1px solid var(--garis); border-bottom: none;
+    padding: 20px 16px 24px;
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+    overflow-y: auto;
+    /* tetap background kartu, tidak ada flex-direction row */
+    gap: 20px;
+  }
+  .menu.terbuka { transform: translateX(0); }
+
+  /* Tombol tutup di dalam drawer */
+  .btn-tutup-drawer {
+    display: flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; padding: 0;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--tinta); border-radius: var(--radius); flex-shrink: 0;
+  }
+  .btn-tutup-drawer:focus-visible { outline: 3px solid var(--hijau-teks); outline-offset: 2px; }
+  .menu-kepala { align-items: center; }
+  .merek { padding: 0; }
+
+  .daftar-menu { flex-direction: column; gap: 2px; }
+  .menu a { white-space: normal; }
+  .menu-bawah { margin-top: auto; padding: 0; flex-direction: column; gap: 4px; }
+
+  /* Konten mulai di bawah header bar */
+  .konten { padding: 20px 16px 120px; }
+
   .kartu-angka { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
