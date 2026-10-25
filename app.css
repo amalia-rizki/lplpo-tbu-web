@@ -112,6 +112,47 @@
   .kartu-angka { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* ---------- Stockopname ---------- */
+.inp-fisik {
+  width: 100%; max-width: 120px; height: 40px; padding: 0 10px;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta);
+  font-size: 17px; font-family: var(--font-form);
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.inp-fisik:focus { outline: 3px solid var(--hijau-teks); outline-offset: 1px; }
+
+.so-kartu { display: flex; flex-direction: column; gap: 10px; }
+.so-kepala { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.so-nama { display: flex; flex-direction: column; gap: 2px; }
+.so-selisih { font-family: var(--font-form); font-size: 22px; font-weight: 800; white-space: nowrap; }
+.so-selisih.lebih  { color: var(--aman-teks); }
+.so-selisih.kurang { color: var(--bahaya); }
+.so-satuan { font-size: 14px; font-weight: 400; }
+.so-ringkasan { font-size: 14px; color: var(--tinta-pudar); }
+.so-btn-detail { font-size: 15px; min-height: 36px; padding: 0 14px; align-self: flex-start; }
+
+.so-transaksi { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; border-top: 1px solid var(--garis); }
+.so-tx-daftar { display: flex; flex-direction: column; gap: 4px; }
+.so-tx-baris { display: flex; gap: 10px; font-size: 14px; font-family: var(--font-form); align-items: baseline; }
+.so-tx-baris span:first-child { min-width: 80px; }
+.so-tx-baris span:last-child { margin-left: auto; font-weight: 600; }
+.so-plus  { color: var(--aman-teks); }
+.so-minus { color: var(--bahaya); }
+
+.so-form-edit, .so-form-tambah { display: flex; flex-direction: column; gap: 8px; }
+.so-pilih-mutasi {
+  height: var(--sentuh); padding: 0 12px; width: 100%;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 15px; font-family: var(--font-form);
+}
+.so-inp-edit {
+  height: var(--sentuh); padding: 0 12px; width: 100%; max-width: 180px;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 17px; font-family: var(--font-form);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Master data: tab, pencarian, daftar ---------- */
 .batas-dalam { display: flex; flex-direction: column; gap: 20px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
