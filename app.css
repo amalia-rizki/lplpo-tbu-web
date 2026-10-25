@@ -112,6 +112,72 @@
   .kartu-angka { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* ---------- Penerimaan ---------- */
+.pnr-header { }
+.pnr-select {
+  height: var(--sentuh); padding: 0 12px; width: 100%;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 17px; font-family: var(--font-form);
+}
+.pnr-tgl {
+  height: var(--sentuh); padding: 0 12px; width: 100%;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 17px; font-family: var(--font-form);
+}
+.pnr-tambah-baris { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.pnr-pilih-obat { flex: 1 1 220px; }
+
+/* Kartu per item */
+.pnr-baris { display: flex; flex-direction: column; gap: 14px; }
+.pnr-baris-kepala { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pnr-hapus { min-height: 36px; padding: 0 10px; font-size: 15px; }
+.pnr-isi { display: flex; flex-direction: column; gap: 10px; }
+.pnr-label { font-size: 14px; }
+
+/* Scroll batch chips */
+.pnr-batch-area { display: flex; flex-direction: column; gap: 6px; }
+.pnr-batch-scroll {
+  display: flex; flex-direction: row; gap: 8px;
+  overflow-x: auto; padding-bottom: 4px;
+}
+.pnr-chip {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 6px 12px; border-radius: var(--radius);
+  border: 1.5px solid var(--garis); background: var(--kartu);
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  text-align: left;
+}
+.pnr-chip:hover { border-color: var(--hijau-teks); }
+.pnr-chip.aktif { border-color: var(--hijau-teks); background: var(--hijau-muda); }
+.pnr-chip-no { font-size: 14px; font-weight: 600; font-family: var(--font-form); color: var(--tinta); }
+.pnr-chip-ed { font-size: 12px; color: var(--tinta-pudar); }
+.pnr-chip-baru .pnr-chip-no { color: var(--hijau-teks); }
+
+/* Form batch baru */
+.pnr-form-batch-baru { display: flex; gap: 12px; flex-wrap: wrap; }
+.pnr-inp-batch {
+  height: var(--sentuh); padding: 0 12px; width: 100%;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 17px; font-family: var(--font-form);
+}
+.pnr-inp-ed {
+  height: var(--sentuh); padding: 0 12px; width: 100%;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 17px; font-family: var(--font-form);
+}
+.pnr-form-batch-baru .field { flex: 1 1 160px; }
+
+/* Baris jumlah */
+.pnr-jumlah-baris { display: flex; align-items: center; gap: 10px; }
+.pnr-inp-jumlah {
+  width: 120px; height: var(--sentuh); padding: 0 12px;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta);
+  font-size: 17px; font-family: var(--font-form);
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+.pnr-satuan { font-size: 15px; }
+
 /* ---------- Stockopname ---------- */
 .inp-fisik {
   width: 100%; max-width: 120px; height: 40px; padding: 0 10px;
