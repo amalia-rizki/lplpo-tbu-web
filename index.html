@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masuk | LPLPO TBU</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&family=Public+Sans:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="tema.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="login-bungkus">
+  <main class="login-kartu">
+    <div class="merek">
+      <div class="nama">LPLPO TBU</div>
+      <p>Puskesmas Tambang Ulang</p>
+    </div>
+
+    <section class="panel f" aria-labelledby="judul-masuk">
+      <form id="form-masuk" novalidate>
+        <h1 id="judul-masuk" style="font-family: var(--font-umum); font-size: 26px;">Masuk</h1>
+
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="username" inputmode="email" required>
+        </div>
+
+        <div class="field">
+          <label for="sandi">Kata sandi</label>
+          <input id="sandi" name="sandi" type="password" autocomplete="current-password" required>
+          <label class="tampil-sandi" style="font-weight: 400;">
+            <input id="tampil" type="checkbox"> Tampilkan kata sandi
+          </label>
+        </div>
+
+        <p id="pesan" class="pesan" role="alert" hidden></p>
+
+        <button id="tombol" class="btn btn-utama" type="submit">Masuk</button>
+      </form>
+    </section>
+  </main>
+</div>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+(function () {
+  var form = document.getElementById("form-masuk");
+  var email = document.getElementById("email");
+  var sandi = document.getElementById("sandi");
+  var tampil = document.getElementById("tampil");
+  var tombol = document.getElementById("tombol");
+  var pesan = document.getElementById("pesan");
+  var timerBangun = null;
+
+  // Sudah punya sesi? Langsung ke aplikasi (aplikasi yang memeriksa keabsahannya).
+  if (LPLPO.sesi()) { location.replace("app.html"); return; }
+
+  function tampilkan(teks, jenis) {
+    pesan.textContent = teks;
+    pesan.className = "pesan " + jenis;
+    pesan.hidden = false;
+  }
+
+  tampil.addEventListener("change", function () {
+    sandi.type = tampil.checked ? "text" : "password";
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    pesan.hidden = true;
+
+    if (!email.value.trim() || !sandi.value) {
+      tampilkan("Isi email dan kata sandi.", "galat");
+      (email.value.trim() ? sandi : email).focus();
+      return;
+    }
+
+    tombol.disabled = true;
+    tombol.textContent = "Memeriksa...";
+    // Server di Fly.io bisa tertidur dan butuh beberapa detik untuk bangun.
+    timerBangun = setTimeout(function () {
+      tampilkan("Server sedang bangun. Tunggu sebentar.", "info");
+    }, 4000);
+
+    LPLPO.masuk(email.value.trim(), sandi.value).then(
+      function () { location.replace("app.html"); },
+      function (err) {
+        clearTimeout(timerBangun);
+        tombol.disabled = false;
+        tombol.textContent = "Masuk";
+        tampilkan(err.pesan || "Gagal masuk. Coba lagi.", "galat");
+        sandi.focus();
+        sandi.select();
+      }
+    );
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+/* Tambahan khusus aplikasi di atas tema.css */
+
+/* Menu */
+.merek .nama { font-size: 22px; font-weight: 800; line-height: 1.2; color: var(--hijau); }
+.merek { padding: 0 14px; }
+.daftar-menu { display: flex; flex-direction: column; gap: 2px; }
+.menu-bawah { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 0 14px; }
+.menu-bawah .btn-teks { align-self: flex-start; padding: 0; }
+.menu .jumlah {
+  min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px;
+  background: var(--koral); color: var(--tinta);
+  font-size: 14px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* Halaman */
+.judul-halaman { display: flex; flex-direction: column; gap: 6px; }
+.judul-halaman p { margin: 0; max-width: 62ch; color: var(--tinta-pudar); }
+.judul-halaman h1:focus { outline: none; }
+
+/* Kartu angka di dashboard */
+.kartu-angka { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
+.kartu-angka .panel { display: flex; flex-direction: column; gap: 4px; padding: 20px; }
+.kartu-angka .angka { font-family: var(--font-form); font-size: 34px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kartu-angka .nama-angka { font-size: 15px; color: var(--tinta-pudar); }
+
+.status-koneksi { font-size: 14px; color: var(--tinta-pudar); }
+.kotak-galat { border-color: var(--bahaya); display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.kotak-galat p { margin: 0; color: var(--bahaya); font-weight: 600; }
+
+/* Halaman login */
+.login-bungkus { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.login-kartu { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 24px; }
+.login-kartu .merek { padding: 0; }
+.login-kartu .merek p { margin: 0; color: var(--tinta-pudar); font-size: 15px; }
+.login-kartu form { display: flex; flex-direction: column; gap: 18px; }
+.login-kartu .btn { width: 100%; min-height: 48px; }
+.login-kartu .btn[disabled] { opacity: .65; cursor: progress; }
+.tampil-sandi { display: flex; align-items: center; gap: 8px; font-size: 15px; min-height: var(--sentuh); }
+.tampil-sandi input { width: 20px; height: 20px; padding: 0; accent-color: var(--hijau); }
+.pesan { margin: 0; font-size: 15px; }
+.pesan.galat { color: var(--bahaya); font-weight: 600; }
+.pesan.info { color: var(--tinta-pudar); }
+
+@media (max-width: 720px) {
+  .merek { padding: 0; flex: 0 0 auto; }
+  .daftar-menu { flex-direction: row; gap: 4px; }
+  .menu a { white-space: nowrap; }
+  .menu-bawah { margin: 0; padding: 0; flex: 0 0 auto; }
+  .kartu-angka { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

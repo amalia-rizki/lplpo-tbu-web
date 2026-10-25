@@ -1,0 +1,170 @@
+/* Tema LPLPO-TBU: hijau daun dengan aksen koral
+   Font (pasang di <head> atau simpan sendiri sebagai woff2 di Cloudflare Pages):
+   https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&family=Public+Sans:wght@400;600;800&display=swap
+*/
+
+:root {
+  /* Warna */
+  --kertas: #F3F7F4;
+  --kartu: #FFFFFF;
+  --tinta: #12261F;
+  --tinta-pudar: #4F6B60;
+  --hijau: #0F7B5F;
+  --hijau-tua: #0B6049;
+  --hijau-muda: #DDF1E8;
+  --koral: #F06A8D;
+  --garis: #C9DDD3;
+  --garis-isian: #7F9A8D;
+
+  /* Status (sama di semua halaman) */
+  --bahaya: #B42318;
+  --aman-teks: #1E6B45;
+  --aman-latar: #E3F3EA;
+  --segera-teks: #7A4B00;
+  --segera-latar: #FFF1CF;
+
+  /* Huruf */
+  --font-umum: "Public Sans", system-ui, sans-serif;
+  --font-form: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+
+  /* Ukuran dan lebar */
+  --radius: 6px;
+  --radius-kartu: 8px;
+  --sentuh: 44px;
+  --lebar-konten: 960px;
+  --lebar-form: 640px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--kertas);
+  color: var(--tinta);
+  font-family: var(--font-umum);
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+h1 { margin: 0; font-size: 30px; line-height: 1.2; font-weight: 800; }
+h2 { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 600; }
+a { color: var(--hijau); }
+.pudar { color: var(--tinta-pudar); font-size: 14px; }
+
+:focus-visible { outline: 3px solid var(--hijau); outline-offset: 2px; }
+
+/* Form dan tabel memakai Atkinson */
+.f, .f input, .f select, .f textarea, .f button, table.kartu {
+  font-family: var(--font-form);
+}
+
+/* Kerangka aplikasi: menu samping + konten */
+.app { display: flex; flex-wrap: wrap; min-height: 100vh; }
+.menu {
+  flex: 0 0 248px;
+  background: var(--kartu);
+  border-right: 1px solid var(--garis);
+  padding: 28px 16px;
+  display: flex; flex-direction: column; gap: 28px;
+}
+.menu a {
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: var(--sentuh); padding: 0 14px;
+  border-radius: var(--radius);
+  color: var(--tinta); text-decoration: none; font-size: 16px;
+}
+.menu a[aria-current="page"] { background: var(--hijau-muda); font-weight: 600; }
+.konten { flex: 999 1 560px; min-width: 0; padding: 32px 40px 96px; }
+.konten > .batas { max-width: var(--lebar-konten); display: flex; flex-direction: column; gap: 28px; }
+
+/* Panel */
+.panel {
+  background: var(--kartu);
+  border: 1px solid var(--garis);
+  border-radius: var(--radius-kartu);
+  padding: 24px;
+}
+
+/* Tombol */
+.btn {
+  min-height: var(--sentuh); padding: 0 22px;
+  border: 1.5px solid transparent; border-radius: var(--radius);
+  font-size: 16px; font-weight: 600; cursor: pointer;
+}
+.btn-utama { background: var(--hijau); color: #fff; }
+.btn-utama:hover { background: var(--hijau-tua); }
+.btn-garis { background: var(--kartu); color: var(--hijau); border-color: var(--hijau); }
+.btn-teks { background: transparent; color: var(--tinta); text-decoration: underline; padding: 0 16px; }
+.btn-bahaya { background: transparent; color: var(--bahaya); padding: 0 12px; }
+
+/* Isian */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-weight: 600; font-size: 15px; }
+.field input, .field select, .field textarea {
+  height: var(--sentuh); padding: 0 12px;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 17px; width: 100%;
+}
+.field input[readonly] { background: var(--kertas); border-color: var(--garis); font-weight: 600; }
+.field .bantuan { font-size: 14px; color: var(--tinta-pudar); }
+.field.galat input, .field.galat select { border-color: var(--bahaya); }
+.field .pesan-galat { font-size: 14px; font-weight: 600; color: var(--bahaya); }
+.baris-isian { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+.form-sempit { max-width: var(--lebar-form); }
+
+/* Lencana dan cap */
+.lencana { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; }
+.lencana.aman { background: var(--aman-latar); color: var(--aman-teks); }
+.lencana.segera { background: var(--segera-latar); color: var(--segera-teks); }
+.lencana.koral { background: var(--koral); color: var(--tinta); }
+.cap {
+  display: inline-block; padding: 2px 10px;
+  border: 2px solid var(--bahaya); border-radius: 4px;
+  color: var(--bahaya); font-weight: 800; font-size: 14px;
+  transform: rotate(-3deg);
+}
+
+/* Kategori obat */
+.kategori { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; }
+.kategori.antibiotik { background: #FFE8D1; color: #8A3B00; }
+.kategori.analgesik  { background: #FDE4EA; color: #8F1D3B; }
+.kategori.vitamin    { background: #FFF1B8; color: #6B5200; }
+.kategori.infus      { background: #DDEBFB; color: #1B4B91; }
+.kategori.vaksin     { background: #E8E1FA; color: #4A2BA0; }
+.kategori.alkes      { background: #D5F0F3; color: #0B5560; }
+.kategori.obat-luar  { background: #D9F2E3; color: #145C38; }
+
+/* Tabel kartu stok */
+.tabel-gulir { overflow-x: auto; }
+table.kartu { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+table.kartu th { text-align: left; font-weight: 600; padding: 12px 14px; border-bottom: 2px solid var(--hijau); white-space: nowrap; }
+table.kartu td { padding: 14px; border-bottom: 1px solid var(--garis); vertical-align: top; }
+table.kartu th.n, table.kartu td.n { text-align: right; }
+table.kartu tr.terpilih { background: var(--hijau-muda); }
+
+/* Bilah simpan: menempel di bawah pada layar kecil */
+.bilah-simpan { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+
+/* Layar kecil (HP): menu jadi bilah atas, tabel jadi kartu, tombol simpan menempel */
+@media (max-width: 720px) {
+  .menu { flex: 1 1 100%; flex-direction: row; align-items: center; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--garis); gap: 12px; overflow-x: auto; }
+  .konten { padding: 20px 16px 120px; }
+  .panel { padding: 16px; }
+  .baris-isian { grid-template-columns: 1fr; }
+  .field input, .field select { height: 48px; }
+
+  table.kartu thead { position: absolute; left: -9999px; }
+  table.kartu, table.kartu tbody, table.kartu tr, table.kartu td { display: block; }
+  table.kartu tr { background: var(--kartu); border: 1px solid var(--garis); border-radius: var(--radius-kartu); padding: 8px 14px; margin-bottom: 12px; }
+  table.kartu td { border: 0; padding: 8px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: right; }
+  table.kartu td::before { content: attr(data-label); font-weight: 600; color: var(--tinta-pudar); text-align: left; }
+
+  .bilah-simpan {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    background: var(--kartu); border-top: 1px solid var(--garis);
+    padding: 12px 16px 20px; flex-direction: column; align-items: stretch; gap: 10px;
+  }
+  .bilah-simpan .btn { width: 100%; min-height: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
