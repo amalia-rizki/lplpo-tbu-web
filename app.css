@@ -1,14 +1,14 @@
 /* Tambahan khusus aplikasi di atas tema.css */
 
 /* Menu */
-.merek .nama { font-size: 22px; font-weight: 800; line-height: 1.2; color: var(--hijau); }
+.merek .nama { font-size: 22px; font-weight: 800; line-height: 1.2; color: var(--hijau-teks); }
 .merek { padding: 0 14px; }
 .daftar-menu { display: flex; flex-direction: column; gap: 2px; }
 .menu-bawah { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 0 14px; }
 .menu-bawah .btn-teks { align-self: flex-start; padding: 0; }
 .menu .jumlah {
   min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px;
-  background: var(--koral); color: var(--tinta);
+  background: var(--koral); color: var(--di-atas-koral);
   font-size: 14px; font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center;
 }
@@ -29,7 +29,11 @@
 .kotak-galat p { margin: 0; color: var(--bahaya); font-weight: 600; }
 
 /* Halaman login */
-.login-bungkus { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.login-bungkus {
+  min-height: 100vh; min-height: 100dvh;   /* dvh: tinggi layar yang terlihat, tanpa bilah alamat HP */
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: clamp(24px, 12vh, 112px) 24px 24px;
+}
 .login-kartu { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 24px; }
 .login-kartu .merek { padding: 0; }
 .login-kartu .merek p { margin: 0; color: var(--tinta-pudar); font-size: 15px; }

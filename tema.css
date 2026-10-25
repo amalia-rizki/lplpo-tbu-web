@@ -4,6 +4,8 @@
 */
 
 :root {
+  color-scheme: light dark;
+
   /* Warna */
   --kertas: #F3F7F4;
   --kartu: #FFFFFF;
@@ -11,6 +13,8 @@
   --tinta-pudar: #4F6B60;
   --hijau: #0F7B5F;
   --hijau-tua: #0B6049;
+  --hijau-teks: #0F7B5F;      /* hijau untuk teks, tautan, dan garis (lebih terang di mode gelap) */
+  --di-atas-koral: #12261F;   /* teks di atas latar koral, selalu gelap */
   --hijau-muda: #DDF1E8;
   --koral: #F06A8D;
   --garis: #C9DDD3;
@@ -35,6 +39,25 @@
   --lebar-form: 640px;
 }
 
+/* Mode gelap: mengikuti pengaturan tampilan di HP atau komputer */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --kertas: #0F1A16;
+    --kartu: #17251F;
+    --tinta: #E6F0EA;
+    --tinta-pudar: #9DB5A9;
+    --hijau-muda: #1B3A2F;
+    --hijau-teks: #4FD1A5;
+    --garis: #2B4238;
+    --garis-isian: #6F8B7E;
+    --bahaya: #FF8A7A;
+    --aman-teks: #7FE0A8;
+    --aman-latar: #1C3B2B;
+    --segera-teks: #FFD36B;
+    --segera-latar: #3F3210;
+  }
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -48,10 +71,10 @@ body {
 
 h1 { margin: 0; font-size: 30px; line-height: 1.2; font-weight: 800; }
 h2 { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 600; }
-a { color: var(--hijau); }
+a { color: var(--hijau-teks); }
 .pudar { color: var(--tinta-pudar); font-size: 14px; }
 
-:focus-visible { outline: 3px solid var(--hijau); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--hijau-teks); outline-offset: 2px; }
 
 /* Form dan tabel memakai Atkinson */
 .f, .f input, .f select, .f textarea, .f button, table.kartu {
@@ -59,7 +82,7 @@ a { color: var(--hijau); }
 }
 
 /* Kerangka aplikasi: menu samping + konten */
-.app { display: flex; flex-wrap: wrap; min-height: 100vh; }
+.app { display: flex; flex-wrap: wrap; min-height: 100vh; min-height: 100dvh; }
 .menu {
   flex: 0 0 248px;
   background: var(--kartu);
@@ -93,7 +116,7 @@ a { color: var(--hijau); }
 }
 .btn-utama { background: var(--hijau); color: #fff; }
 .btn-utama:hover { background: var(--hijau-tua); }
-.btn-garis { background: var(--kartu); color: var(--hijau); border-color: var(--hijau); }
+.btn-garis { background: var(--kartu); color: var(--hijau-teks); border-color: var(--hijau-teks); }
 .btn-teks { background: transparent; color: var(--tinta); text-decoration: underline; padding: 0 16px; }
 .btn-bahaya { background: transparent; color: var(--bahaya); padding: 0 12px; }
 
@@ -116,7 +139,7 @@ a { color: var(--hijau); }
 .lencana { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; }
 .lencana.aman { background: var(--aman-latar); color: var(--aman-teks); }
 .lencana.segera { background: var(--segera-latar); color: var(--segera-teks); }
-.lencana.koral { background: var(--koral); color: var(--tinta); }
+.lencana.koral { background: var(--koral); color: var(--di-atas-koral); }
 .cap {
   display: inline-block; padding: 2px 10px;
   border: 2px solid var(--bahaya); border-radius: 4px;
