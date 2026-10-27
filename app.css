@@ -219,6 +219,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Autocomplete cari obat ---------- */
+.cari-obat-bungkus { position: relative; flex: 1 1 220px; }
+.cari-obat-inp {
+  height: var(--sentuh); padding: 0 12px; width: 100%;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 17px; font-family: var(--font-form);
+  box-sizing: border-box;
+}
+.cari-obat-inp:focus { outline: 3px solid var(--hijau-teks); outline-offset: 1px; }
+.cari-obat-daftar {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+  background: var(--kartu); border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  max-height: 260px; overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+}
+.cari-obat-item {
+  padding: 10px 12px; cursor: pointer; font-size: 16px; font-family: var(--font-form);
+  border-bottom: 1px solid var(--garis);
+}
+.cari-obat-item:last-child { border-bottom: none; }
+.cari-obat-item:hover, .cari-obat-item.fokus { background: var(--hijau-muda); }
+.cari-obat-kosong { padding: 10px 12px; font-size: 15px; color: var(--tinta-pudar); }
+
 /* ---------- Master data: tab, pencarian, daftar ---------- */
 .batas-dalam { display: flex; flex-direction: column; gap: 20px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
