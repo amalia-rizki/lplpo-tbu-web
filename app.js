@@ -493,7 +493,7 @@
     // Muat batch untuk obat ini
     LPLPO.daftar("batch", {
       perPage: 50,
-      sort: "-expired_date,no_batch",
+      sort: "-expired_date,nomor_batch",
       filter: 'daftar_obat = "' + b.obatId + '"'
     }).then(function (db) {
       batchScroll.textContent = "";
@@ -503,11 +503,11 @@
           class: "pnr-chip" + (b.batchId === bt.id ? " aktif" : ""),
           "data-id": bt.id
         }, [
-          el("span", { class: "pnr-chip-no" }, bt.no_batch || "—"),
+          el("span", { class: "pnr-chip-no" }, bt.nomor_batch || "—"),
           el("span", { class: "pnr-chip-ed" }, bt.expired_date ? formatED(bt.expired_date) : "tanpa ED")
         ]);
         chip.addEventListener("click", function () {
-          b.batchId = bt.id; b.noBatch = bt.no_batch; b.ed = bt.expired_date;
+          b.batchId = bt.id; b.noBatch = bt.nomor_batch; b.ed = bt.expired_date;
           b._batchBaru = false;
           batchScroll.querySelectorAll(".pnr-chip").forEach(function (c) { c.classList.remove("aktif"); });
           chip.classList.add("aktif");
@@ -878,7 +878,7 @@
 
     LPLPO.daftar("batch", {
       perPage: 50,
-      sort: "expired_date,no_batch",
+      sort: "expired_date,nomor_batch",
       filter: 'daftar_obat = "' + b.obatId + '" && stok > 0'
     }).then(function (db) {
       batchScroll.textContent = "";
@@ -892,7 +892,7 @@
           class: "pnr-chip" + (i === 0 ? " aktif" : ""),
           "data-id": bt.id
         }, [
-          el("span", { class: "pnr-chip-no" }, bt.no_batch || "—"),
+          el("span", { class: "pnr-chip-no" }, bt.nomor_batch || "—"),
           el("span", { class: "pnr-chip-ed" }, (bt.expired_date ? formatED(bt.expired_date) : "tanpa ED") + " \xb7 stok " + bt.stok)
         ]);
         if (i === 0) { b.batchId = bt.id; }
@@ -1150,7 +1150,7 @@
 
     daftarSemua("batch", {
       perPage: 200,
-      sort: "daftar_obat.kode,no_batch",
+      sort: "daftar_obat.kode,nomor_batch",
       expand: "daftar_obat"
     }).then(function (d) {
       area.textContent = "";
@@ -1241,7 +1241,7 @@
         }
         var tr = el("tr", { class: edBulanIni ? "terpilih" : "" }, [
           el("td", { class: "utama", "data-label": "" }, obat.nama_utama || "-"),
-          el("td", { "data-label": "No. batch" }, b.no_batch || "-"),
+          el("td", { "data-label": "No. batch" }, b.nomor_batch || "-"),
           el("td", { "data-label": "ED" }, formatED(b.expired_date)),
           el("td", { class: "n", "data-label": "Stok sistem" },
             b.stok !== undefined && b.stok !== null && b.stok !== "" ? String(b.stok) : "-"),
@@ -1329,7 +1329,7 @@
 
     daftarSemua("batch", {
       perPage: 200,
-      sort: "daftar_obat.kode,no_batch",
+      sort: "daftar_obat.kode,nomor_batch",
       expand: "daftar_obat"
     }).then(function (d) {
       area.textContent = "";
@@ -1369,7 +1369,7 @@
         var kepalaKartu = el("div", { class: "so-kepala" }, [
           el("div", { class: "so-nama" }, [
             el("strong", {}, obat.nama_utama || "-"),
-            el("span", { class: "pudar" }, " · " + (b.no_batch || "tanpa batch") + " · ED " + formatED(b.expired_date))
+            el("span", { class: "pudar" }, " · " + (b.nomor_batch || "tanpa batch") + " · ED " + formatED(b.expired_date))
           ]),
           el("div", { class: "so-selisih " + (diff > 0 ? "lebih" : "kurang") }, [
             el("span", {}, (diff > 0 ? "+" : "") + diff),
@@ -1400,7 +1400,7 @@
           // [PERUBAHAN 28 Okt] Semua transaksi OBAT ini (semua batch dan yang tanpa batch), terbaru di atas.
           Promise.all([
             daftarSemua("mutasi", { filter: 'daftar_obat = "' + obat.id + '"', sort: "-tanggal", expand: "unit,batch", perPage: 200 }),
-            daftarSemua("batch", { filter: 'daftar_obat = "' + obat.id + '"', sort: "no_batch", perPage: 200 })
+            daftarSemua("batch", { filter: 'daftar_obat = "' + obat.id + '"', sort: "nomor_batch", perPage: 200 })
           ]).then(function (hasil) {
             var semuaTx = hasil[0].items;
             var batchObat = hasil[1].items;
@@ -1411,7 +1411,7 @@
 
             function labelBatch(bt) {
               if (!bt) return "tanpa batch";
-              return (bt.no_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "");
+              return (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "");
             }
             function namaBatchTx(tx) {
               if (!tx.batch) return "tanpa batch";
@@ -1571,7 +1571,7 @@
     var inpTambahTanggal = el("input", { type: "date", class: "so-inp-edit", value: tglHari, "aria-label": "Tanggal mutasi" });
     var pilBatchTambah = el("select", { class: "so-pilih-mutasi", "aria-label": "Batch mutasi baru" },
       [el("option", { value: "" }, "— tanpa relasi batch —")].concat(batchObat.map(function (bt) {
-        return el("option", { value: bt.id }, (bt.no_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : ""));
+        return el("option", { value: bt.id }, (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : ""));
       })));
     pilBatchTambah.value = batch.id;
     var tombolTambah = el("button", { type: "button", class: "btn btn-utama", disabled: true }, "Tambah mutasi");
