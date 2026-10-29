@@ -630,7 +630,7 @@
           // Buat batch baru dulu
           LPLPO.buat("batch", {
             daftar_obat: b.obatId,
-            no_batch: b.noBatch || "",
+            nomor_batch: b.noBatch || "",
             expired_date: b.ed || undefined,
             stok: 0
           }).then(function (bt) {
