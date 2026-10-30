@@ -1192,7 +1192,7 @@
 
       var badan = el("tbody");
       items.forEach(function (b, idx) {
-        var obat = (b.expand && b.expand.daftar_obat) || {};
+        var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
         var nilaiSimpan = progress[b.id] !== undefined ? progress[b.id] : "";
 
         var inp = el("input", {
