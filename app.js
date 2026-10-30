@@ -1150,7 +1150,7 @@
 
     daftarSemua("batch", {
       perPage: 200,
-      sort: "daftar_obat.kode,nomor_batch",
+      sort: "nomor_batch",
       expand: "daftar_obat"
     }).then(function (d) {
       area.textContent = "";
@@ -1329,7 +1329,7 @@
 
     daftarSemua("batch", {
       perPage: 200,
-      sort: "daftar_obat.kode,nomor_batch",
+      sort: "nomor_batch",
       expand: "daftar_obat"
     }).then(function (d) {
       area.textContent = "";
