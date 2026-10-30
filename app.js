@@ -1151,7 +1151,7 @@
     daftarSemua("batch", {
       perPage: 200,
       sort: "nomor_batch",
-      expand: "daftar_obat"
+      expand: "obat"
     }).then(function (d) {
       area.textContent = "";
 
@@ -1330,7 +1330,7 @@
     daftarSemua("batch", {
       perPage: 200,
       sort: "nomor_batch",
-      expand: "daftar_obat"
+      expand: "obat"
     }).then(function (d) {
       area.textContent = "";
 
@@ -1358,7 +1358,7 @@
       area.appendChild(el("p", {}, selisih.length + " batch memiliki selisih:"));
 
       selisih.forEach(function (b) {
-        var obat = (b.expand && b.expand.daftar_obat) || {};
+        var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
         var fisik = fisikDari(b);
         var sistem = (b.stok !== undefined && b.stok !== null && b.stok !== "") ? Number(b.stok) : 0;
         var diff = fisik - sistem;
