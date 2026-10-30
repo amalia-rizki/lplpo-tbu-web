@@ -1165,6 +1165,15 @@
       // Filter: ED belum lewat atau tidak ada ED
       var items = d.items.filter(function (b) { return !edLewat(b.expired_date); });
 
+      // Sort client-side by kode obat (karena PocketBase tidak support sort by relation field)
+      items.sort(function (a, b) {
+        var ka = (a.expand && (a.expand.obat || a.expand.daftar_obat) && (a.expand.obat || a.expand.daftar_obat).kode) || "";
+        var kb = (b.expand && (b.expand.obat || b.expand.daftar_obat) && (b.expand.obat || b.expand.daftar_obat).kode) || "";
+        if (ka < kb) return -1;
+        if (ka > kb) return 1;
+        return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
+      });
+
       if (!items.length) {
         area.appendChild(el("section", { class: "panel" }, [
           el("p", { style: "margin:0" }, "Semua batch sudah melewati tanggal kedaluwarsa.")
@@ -1346,6 +1355,15 @@
         var sistem = (b.stok !== undefined && b.stok !== null && b.stok !== "") ? Number(b.stok) : null;
         if (sistem === null) return fisik !== 0; // stok kosong, fisik ada → selisih
         return fisik !== sistem;
+      });
+
+      // Sort by kode obat, lalu nomor_batch
+      selisih.sort(function (a, b) {
+        var ka = (a.expand && (a.expand.obat || a.expand.daftar_obat) && (a.expand.obat || a.expand.daftar_obat).kode) || "";
+        var kb = (b.expand && (b.expand.obat || b.expand.daftar_obat) && (b.expand.obat || b.expand.daftar_obat).kode) || "";
+        if (ka < kb) return -1;
+        if (ka > kb) return 1;
+        return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
       });
 
       if (!selisih.length) {
