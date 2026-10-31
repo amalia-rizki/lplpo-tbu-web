@@ -1153,17 +1153,37 @@
       sort: "nomor_batch",
       expand: "obat"
     }).then(function (d) {
-      area.textContent = "";
-
       if (!d.items.length) {
+        area.textContent = "";
         area.appendChild(el("section", { class: "panel" }, [
           el("p", { style: "margin:0" }, "Belum ada data batch. Seed data batch terlebih dahulu.")
         ]));
         return;
       }
 
-      // Filter: ED belum lewat atau tidak ada ED
-      var items = d.items.filter(function (b) { return !edLewat(b.expired_date); });
+      // Fetch semua mutasi untuk hitung stok sistem
+      area.textContent = "";
+      area.appendChild(el("p", { class: "status-koneksi" }, "Menghitung stok sistem dari mutasi..."));
+      return daftarSemua("mutasi", { perPage: 500 }).then(function (dm) {
+        // Hitung stok per batch: stok_awal + masuk - keluar
+        var mutasiPerBatch = {}; // batch_id → {masuk, keluar}
+        dm.items.forEach(function (m) {
+          if (!m.batch) return; // mutasi tanpa batch diabaikan di sini
+          if (!mutasiPerBatch[m.batch]) mutasiPerBatch[m.batch] = { masuk: 0, keluar: 0 };
+          if (m.jenis === "masuk") mutasiPerBatch[m.batch].masuk += (m.jumlah || 0);
+          else mutasiPerBatch[m.batch].keluar += (m.jumlah || 0);
+        });
+
+        // Tempel stok_sistem ke tiap batch
+        d.items.forEach(function (b) {
+          var mv = mutasiPerBatch[b.id] || { masuk: 0, keluar: 0 };
+          b._stok_sistem = (b.stok_awal || 0) + mv.masuk - mv.keluar;
+        });
+
+        area.textContent = "";
+
+        // Filter: ED belum lewat atau tidak ada ED
+        var items = d.items.filter(function (b) { return !edLewat(b.expired_date); });
 
       // Sort client-side sesuai urutan kategori LPLPO, lalu posisi, lalu nomor_batch
       var URUT_KAT = ["A","T","B","F","D","C","E","G","H","I","J","K","L","M","V","W","N","O","P","Q","R","S","X","U","Y"];
@@ -1263,7 +1283,7 @@
           el("td", { "data-label": "No. batch" }, b.nomor_batch || "-"),
           el("td", { "data-label": "ED" }, formatED(b.expired_date)),
           el("td", { class: "n", "data-label": "Stok sistem" },
-            b.stok !== undefined && b.stok !== null && b.stok !== "" ? String(b.stok) : "-"),
+            b._stok_sistem !== undefined ? String(b._stok_sistem) : "-"),
           el("td", { class: "n", "data-label": "Jumlah fisik" }, inp)
         ]);
         badan.appendChild(tr);
@@ -1318,6 +1338,10 @@
       });
 
       area.appendChild(el("div", { class: "bilah-simpan" }, [pesanSimpan, tombolTambahBatch, tombolSimpan]));
+
+      }, function (err) {
+        tanganiGalat(err, function () { tahapHitung(area, kunciLS); }, area);
+      }); // tutup .then(dm) mutasi
 
     }, function (err) {
       tanganiGalat(err, function () { tahapHitung(area, kunciLS); }, area);
@@ -1449,21 +1473,34 @@
       sort: "nomor_batch",
       expand: "obat"
     }).then(function (d) {
-      area.textContent = "";
+      return daftarSemua("mutasi", { perPage: 500 }).then(function (dm) {
+        // Hitung stok sistem per batch dari mutasi
+        var mutasiPerBatch = {};
+        dm.items.forEach(function (m) {
+          if (!m.batch) return;
+          if (!mutasiPerBatch[m.batch]) mutasiPerBatch[m.batch] = { masuk: 0, keluar: 0 };
+          if (m.jenis === "masuk") mutasiPerBatch[m.batch].masuk += (m.jumlah || 0);
+          else mutasiPerBatch[m.batch].keluar += (m.jumlah || 0);
+        });
+        d.items.forEach(function (b) {
+          var mv = mutasiPerBatch[b.id] || { masuk: 0, keluar: 0 };
+          b._stok_sistem = (b.stok_awal || 0) + mv.masuk - mv.keluar;
+        });
 
-      if (soPesanTerakhir) {
-        area.appendChild(el("p", { class: "pesan info" }, soPesanTerakhir));
-        soPesanTerakhir = "";
-      }
+        area.textContent = "";
 
-      // Hanya tampilkan yang ada selisih (fisik berbeda dari stok sistem)
-      var selisih = d.items.filter(function (b) {
-        var fisik = fisikDari(b);
-        if (fisik === null) return false;
-        var sistem = (b.stok !== undefined && b.stok !== null && b.stok !== "") ? Number(b.stok) : null;
-        if (sistem === null) return fisik !== 0; // stok kosong, fisik ada → selisih
-        return fisik !== sistem;
-      });
+        if (soPesanTerakhir) {
+          area.appendChild(el("p", { class: "pesan info" }, soPesanTerakhir));
+          soPesanTerakhir = "";
+        }
+
+        // Hanya tampilkan yang ada selisih (fisik berbeda dari stok sistem)
+        var selisih = d.items.filter(function (b) {
+          var fisik = fisikDari(b);
+          if (fisik === null) return false;
+          var sistem = b._stok_sistem;
+          return fisik !== sistem;
+        });
 
       // Sort by urutan kategori LPLPO, lalu kode, lalu nomor_batch
       selisih.sort(function (a, b) {
@@ -1488,7 +1525,7 @@
       selisih.forEach(function (b) {
         var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
         var fisik = fisikDari(b);
-        var sistem = (b.stok !== undefined && b.stok !== null && b.stok !== "") ? Number(b.stok) : 0;
+        var sistem = b._stok_sistem;
         var diff = fisik - sistem;
 
         var kartu = el("div", { class: "panel so-kartu" });
@@ -1679,6 +1716,10 @@
         kartu.appendChild(areaTransaksi);
         area.appendChild(kartu);
       });
+
+      }, function (err) {
+        tanganiGalat(err, function () { tahapSesuaikan(area, kunciLS); }, area);
+      }); // tutup .then(dm) mutasi
 
     }, function (err) {
       tanganiGalat(err, function () { tahapSesuaikan(area, kunciLS); }, area);
