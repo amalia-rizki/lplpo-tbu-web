@@ -494,7 +494,7 @@
     LPLPO.daftar("batch", {
       perPage: 50,
       sort: "-expired_date,nomor_batch",
-      filter: 'daftar_obat = "' + b.obatId + '"'
+      filter: 'obat = "' + b.obatId + '"'
     }).then(function (db) {
       batchScroll.textContent = "";
       db.items.forEach(function (bt) {
@@ -612,27 +612,48 @@
         var obat = obatList.filter(function (o) { return o.id === b.obatId; })[0] || {};
 
         function buatMutasi(batchId) {
+          var delta = jenis === "masuk" ? Number(b.jumlah) : -Number(b.jumlah);
           return LPLPO.buat("mutasi", {
-            daftar_obat: b.obatId,
+            obat: b.obatId,
             batch: batchId || undefined,
             unit: state.unitId,
             jenis: jenis,
             jumlah: Number(b.jumlah),
             tanggal: state.tanggal,
-            keterangan: ""
+            status: "confirmed",
+            catatan: ""
           }).then(function () {
+            // Update stok_sistem di batch
+            if (batchId) {
+              return ambilBatch(batchId).then(function (bt) {
+                var stokBaru = (bt.stok_sistem !== undefined && bt.stok_sistem !== null ? bt.stok_sistem : (bt.stok_awal || 0)) + delta;
+                return LPLPO.ubah("batch", batchId, { stok_sistem: stokBaru });
+              }).then(function () {
+                hasil.push({ obat: obat, jumlah: Number(b.jumlah) });
+                prosesBerikutnya();
+              });
+            }
             hasil.push({ obat: obat, jumlah: Number(b.jumlah) });
             prosesBerikutnya();
           });
         }
 
+        function ambilBatch(batchId) {
+          if (typeof LPLPO.ambil === "function") return LPLPO.ambil("batch", batchId);
+          var s = LPLPO.sesi() || {};
+          return fetch(window.LPLPO_CONFIG.API + "/api/collections/batch/records/" + batchId, {
+            headers: { Authorization: s.token || "" }
+          }).then(function (r) { return r.json(); });
+        }
+
         if (b._batchBaru) {
           // Buat batch baru dulu
           LPLPO.buat("batch", {
-            daftar_obat: b.obatId,
+            obat: b.obatId,
             nomor_batch: b.noBatch || "",
             expired_date: b.ed || undefined,
-            stok: 0
+            stok_awal: 0,
+            stok_sistem: Number(b.jumlah)
           }).then(function (bt) {
             buatMutasi(bt.id);
           }, function (err) {
@@ -879,7 +900,7 @@
     LPLPO.daftar("batch", {
       perPage: 50,
       sort: "expired_date,nomor_batch",
-      filter: 'daftar_obat = "' + b.obatId + '" && stok > 0'
+      filter: 'obat = "' + b.obatId + '" && stok_sistem > 0'
     }).then(function (db) {
       batchScroll.textContent = "";
       if (!db.items.length) {
@@ -974,14 +995,33 @@
       var b = antrian.shift();
       var obat = obatList.filter(function (o) { return o.id === b.obatId; })[0] || {};
       LPLPO.buat("mutasi", {
-        daftar_obat: b.obatId,
+        obat: b.obatId,
         batch: b.batchId,
         unit: state.unitId,
         jenis: "keluar",
         jumlah: Number(b.jumlah),
         tanggal: state.tanggal,
-        keterangan: ""
+        status: "confirmed",
+        catatan: ""
       }).then(function () {
+        // Update stok_sistem di batch
+        if (b.batchId) {
+          var ambilBatchKeluar = typeof LPLPO.ambil === "function"
+            ? function (id) { return LPLPO.ambil("batch", id); }
+            : function (id) {
+                var s = LPLPO.sesi() || {};
+                return fetch(window.LPLPO_CONFIG.API + "/api/collections/batch/records/" + id, {
+                  headers: { Authorization: s.token || "" }
+                }).then(function (r) { return r.json(); });
+              };
+          return ambilBatchKeluar(b.batchId).then(function (bt) {
+            var stokBaru = (bt.stok_sistem !== undefined && bt.stok_sistem !== null ? bt.stok_sistem : (bt.stok_awal || 0)) - Number(b.jumlah);
+            return LPLPO.ubah("batch", b.batchId, { stok_sistem: stokBaru });
+          }).then(function () {
+            hasilList.push({ obat: obat, jumlah: Number(b.jumlah) });
+            prosesBerikutnya();
+          });
+        }
         hasilList.push({ obat: obat, jumlah: Number(b.jumlah) });
         prosesBerikutnya();
       }, function (err) {
@@ -1161,23 +1201,14 @@
         return;
       }
 
-      // Fetch semua mutasi untuk hitung stok sistem
       area.textContent = "";
-      area.appendChild(el("p", { class: "status-koneksi" }, "Menghitung stok sistem dari mutasi..."));
-      return daftarSemua("mutasi", { perPage: 500 }).then(function (dm) {
-        // Hitung stok per batch: stok_awal + masuk - keluar
-        var mutasiPerBatch = {}; // batch_id → {masuk, keluar}
-        dm.items.forEach(function (m) {
-          if (!m.batch) return; // mutasi tanpa batch diabaikan di sini
-          if (!mutasiPerBatch[m.batch]) mutasiPerBatch[m.batch] = { masuk: 0, keluar: 0 };
-          if (m.jenis === "masuk") mutasiPerBatch[m.batch].masuk += (m.jumlah || 0);
-          else mutasiPerBatch[m.batch].keluar += (m.jumlah || 0);
-        });
-
-        // Tempel stok_sistem ke tiap batch
+      return Promise.resolve().then(function () {
+        // Gunakan stok_sistem yang sudah ada di batch (diupdate setiap mutasi)
+        // Fallback ke stok_awal kalau stok_sistem belum diisi
         d.items.forEach(function (b) {
-          var mv = mutasiPerBatch[b.id] || { masuk: 0, keluar: 0 };
-          b._stok_sistem = (b.stok_awal || 0) + mv.masuk - mv.keluar;
+          b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined)
+            ? b.stok_sistem
+            : (b.stok_awal || 0);
         });
 
         area.textContent = "";
@@ -1339,9 +1370,7 @@
 
       area.appendChild(el("div", { class: "bilah-simpan" }, [pesanSimpan, tombolTambahBatch, tombolSimpan]));
 
-      }, function (err) {
-        tanganiGalat(err, function () { tahapHitung(area, kunciLS); }, area);
-      }); // tutup .then(dm) mutasi
+      }); // tutup Promise.resolve().then(...)
 
     }, function (err) {
       tanganiGalat(err, function () { tahapHitung(area, kunciLS); }, area);
@@ -1473,19 +1502,14 @@
       sort: "nomor_batch",
       expand: "obat"
     }).then(function (d) {
-      return daftarSemua("mutasi", { perPage: 500 }).then(function (dm) {
-        // Hitung stok sistem per batch dari mutasi
-        var mutasiPerBatch = {};
-        dm.items.forEach(function (m) {
-          if (!m.batch) return;
-          if (!mutasiPerBatch[m.batch]) mutasiPerBatch[m.batch] = { masuk: 0, keluar: 0 };
-          if (m.jenis === "masuk") mutasiPerBatch[m.batch].masuk += (m.jumlah || 0);
-          else mutasiPerBatch[m.batch].keluar += (m.jumlah || 0);
-        });
-        d.items.forEach(function (b) {
-          var mv = mutasiPerBatch[b.id] || { masuk: 0, keluar: 0 };
-          b._stok_sistem = (b.stok_awal || 0) + mv.masuk - mv.keluar;
-        });
+      // Gunakan stok_sistem yang sudah ada di batch (diupdate setiap mutasi)
+      // Fallback ke stok_awal kalau stok_sistem belum diisi
+      d.items.forEach(function (b) {
+        b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined)
+          ? b.stok_sistem
+          : (b.stok_awal || 0);
+      });
+      return Promise.resolve().then(function () {
 
         area.textContent = "";
 
@@ -1512,14 +1536,7 @@
         if (ua[2] > ub[2]) return 1;
         return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
       });
-      // Debug info
-      var totalProgress = Object.keys(progress).filter(function(k){ return progress[k] !== ""; }).length;
-      var contohSelisih = d.items.slice(0,3).map(function(b){
-        var f = fisikDari(b); var s = b._stok_sistem;
-        return (b.nomor_batch||"?") + " fisik=" + f + " sistem=" + s + " (awal=" + b.stok_awal + ")";
-      }).join(" | ");
-      area.appendChild(el("p", { class: "status-koneksi", style: "font-size:12px;word-break:break-all" },
-        "DEBUG: progress=" + totalProgress + " batch=" + d.items.length + " selisih=" + selisih.length + " | " + contohSelisih));
+
       if (!selisih.length) {
         area.appendChild(el("section", { class: "panel" }, [
           el("p", { style: "margin:0" }, "Tidak ada selisih. Semua stok cocok dengan hitungan fisik. 🎉")
@@ -1571,8 +1588,8 @@
 
           // [PERUBAHAN 28 Okt] Semua transaksi OBAT ini (semua batch dan yang tanpa batch), terbaru di atas.
           Promise.all([
-            daftarSemua("mutasi", { filter: 'daftar_obat = "' + obat.id + '"', sort: "-tanggal", expand: "unit,batch", perPage: 200 }),
-            daftarSemua("batch", { filter: 'daftar_obat = "' + obat.id + '"', sort: "nomor_batch", perPage: 200 })
+            daftarSemua("mutasi", { filter: 'obat = "' + obat.id + '"', sort: "-tanggal", expand: "unit,batch", perPage: 200 }),
+            daftarSemua("batch", { filter: 'obat = "' + obat.id + '"', sort: "nomor_batch", perPage: 200 })
           ]).then(function (hasil) {
             var semuaTx = hasil[0].items;
             var batchObat = hasil[1].items;
@@ -1724,9 +1741,7 @@
         area.appendChild(kartu);
       });
 
-      }, function (err) {
-        tanganiGalat(err, function () { tahapSesuaikan(area, kunciLS); }, area);
-      }); // tutup .then(dm) mutasi
+      }); // tutup Promise.resolve().then(...)
 
     }, function (err) {
       tanganiGalat(err, function () { tahapSesuaikan(area, kunciLS); }, area);
