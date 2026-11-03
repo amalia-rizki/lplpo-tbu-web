@@ -1512,7 +1512,14 @@
         if (ua[2] > ub[2]) return 1;
         return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
       });
-
+      // Debug info
+      var totalProgress = Object.keys(progress).filter(function(k){ return progress[k] !== ""; }).length;
+      var contohSelisih = d.items.slice(0,3).map(function(b){
+        var f = fisikDari(b); var s = b._stok_sistem;
+        return (b.nomor_batch||"?") + " fisik=" + f + " sistem=" + s + " (awal=" + b.stok_awal + ")";
+      }).join(" | ");
+      area.appendChild(el("p", { class: "status-koneksi", style: "font-size:12px;word-break:break-all" },
+        "DEBUG: progress=" + totalProgress + " batch=" + d.items.length + " selisih=" + selisih.length + " | " + contohSelisih));
       if (!selisih.length) {
         area.appendChild(el("section", { class: "panel" }, [
           el("p", { style: "margin:0" }, "Tidak ada selisih. Semua stok cocok dengan hitungan fisik. 🎉")
