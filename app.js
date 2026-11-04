@@ -1144,7 +1144,7 @@
     return d < new Date(sekarang.getFullYear(), sekarang.getMonth(), 1);
   }
 
-  // [PERUBAHAN 28 Okt] Muat semua halaman hasil (PocketBase membatasi perPage), lalu kembalikan { items }.
+  // Muat semua halaman hasil (PocketBase membatasi perPage), lalu kembalikan { items }.
   function daftarSemua(koleksi, opsi) {
     var semua = [];
     function ambil(hal) {
@@ -1160,8 +1160,7 @@
     return ambil(1);
   }
 
-  // [PERUBAHAN 28 Okt] Hapus satu record. Pakai LPLPO.hapus jika sudah ada di file API,
-  // kalau belum, pakai DELETE langsung (token diambil dari LPLPO.sesi()).
+  // Hapus satu record.
   function hapusRecord(koleksi, id) {
     if (typeof LPLPO.hapus === "function") return LPLPO.hapus(koleksi, id);
     var s = LPLPO.sesi() || {};
@@ -1177,7 +1176,6 @@
     });
   }
 
-  // [PERUBAHAN 28 Okt] Pesan singkat setelah memuat ulang tab Penyesuaian.
   var soPesanTerakhir = "";
 
   function tahapHitung(area, kunciLS) {
@@ -1203,8 +1201,6 @@
 
       area.textContent = "";
       return Promise.resolve().then(function () {
-        // Gunakan stok_sistem yang sudah ada di batch (diupdate setiap mutasi)
-        // Fallback ke stok_awal kalau stok_sistem belum diisi
         d.items.forEach(function (b) {
           b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined)
             ? b.stok_sistem
@@ -1216,170 +1212,156 @@
         // Filter: ED belum lewat atau tidak ada ED
         var items = d.items.filter(function (b) { return !edLewat(b.expired_date); });
 
-      // Sort client-side sesuai urutan kategori LPLPO, lalu posisi, lalu nomor_batch
-      var URUT_KAT = ["A","T","B","F","D","C","E","G","H","I","J","K","L","M","V","W","N","O","P","Q","R","S","X","U","Y"];
-      function urutObat(kode) {
-        if (!kode) return [99, "", ""];
-        var bagian = kode.split("-");
-        var kat = bagian[0] || "";
-        var idx = URUT_KAT.indexOf(kat);
-        return [idx === -1 ? 98 : idx, kat, kode];
-      }
-      items.sort(function (a, b) {
-        var oa = (a.expand && (a.expand.obat || a.expand.daftar_obat)) || {};
-        var ob = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
-        var ua = urutObat(oa.kode), ub = urutObat(ob.kode);
-        if (ua[0] !== ub[0]) return ua[0] - ub[0];
-        if (ua[2] < ub[2]) return -1;
-        if (ua[2] > ub[2]) return 1;
-        return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
-      });
-
-      if (!items.length) {
-        area.appendChild(el("section", { class: "panel" }, [
-          el("p", { style: "margin:0" }, "Semua batch sudah melewati tanggal kedaluwarsa.")
-        ]));
-        return;
-      }
-
-      // [PERUBAHAN 28 Okt] Beri tahu berapa batch ED-lewat yang tidak ditampilkan.
-      var tersembunyi = d.items.length - items.length;
-      if (tersembunyi > 0) {
-        area.appendChild(el("p", { class: "status-koneksi" },
-          tersembunyi + " batch dengan ED yang sudah lewat tidak ditampilkan; di tab Penyesuaian dianggap fisik 0."));
-      }
-
-      var inputMap = {}; // id batch → input element
-
-      // Buat tabel
-      var kepala = el("thead", {}, [el("tr", {}, [
-        el("th", {}, "Nama obat"),
-        el("th", {}, "No. batch"),
-        el("th", {}, "ED"),
-        el("th", { class: "n" }, "Stok sistem"),
-        el("th", { class: "n" }, "Jumlah fisik")
-      ])]);
-
-      var badan = el("tbody");
-      items.forEach(function (b, idx) {
-        var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
-        var nilaiSimpan = progress[b.id] !== undefined ? progress[b.id] : "";
-
-        var inp = el("input", {
-          type: "number", min: "0", step: "1",
-          class: "inp-fisik", "data-id": b.id,
-          value: String(nilaiSimpan),
-          inputmode: "numeric",
-          "aria-label": "Jumlah fisik " + (obat.nama_utama || b.id)
-        });
-        inputMap[b.id] = inp;
-
-        // Enter → fokus ke input berikutnya
-        inp.addEventListener("keydown", function (e) {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            var kunci = Object.keys(inputMap);
-            var posisi = kunci.indexOf(b.id);
-            if (posisi < kunci.length - 1) {
-              inputMap[kunci[posisi + 1]].focus();
-              inputMap[kunci[posisi + 1]].select();
-            }
-          }
-          // Simpan otomatis ke localStorage saat mengetik
-          if (e.key !== "Tab") {
-            setTimeout(function () {
-              try {
-                progress[b.id] = inp.value !== "" ? Number(inp.value) : "";
-                localStorage.setItem(kunciLS, JSON.stringify(progress));
-              } catch (x) {}
-            }, 0);
-          }
-        });
-        inp.addEventListener("change", function () {
-          try {
-            progress[b.id] = inp.value !== "" ? Number(inp.value) : "";
-            localStorage.setItem(kunciLS, JSON.stringify(progress));
-          } catch (x) {}
-        });
-
-        // Warna baris: ED bulan ini = kuning
-        var edBulanIni = false;
-        if (b.expired_date) {
-          var d2 = new Date(b.expired_date);
-          var skrg = new Date();
-          edBulanIni = d2.getFullYear() === skrg.getFullYear() && d2.getMonth() === skrg.getMonth();
+        var URUT_KAT = ["A","T","B","F","D","C","E","G","H","I","J","K","L","M","V","W","N","O","P","Q","R","S","X","U","Y"];
+        function urutObat(kode) {
+          if (!kode) return [99, "", ""];
+          var bagian = kode.split("-");
+          var kat = bagian[0] || "";
+          var idx = URUT_KAT.indexOf(kat);
+          return [idx === -1 ? 98 : idx, kat, kode];
         }
-        var tr = el("tr", { class: edBulanIni ? "terpilih" : "" }, [
-          el("td", { class: "utama", "data-label": "" }, obat.nama_utama || "-"),
-          el("td", { "data-label": "No. batch" }, b.nomor_batch || "-"),
-          el("td", { "data-label": "ED" }, formatED(b.expired_date)),
-          el("td", { class: "n", "data-label": "Stok sistem" },
-            b._stok_sistem !== undefined ? String(b._stok_sistem) : "-"),
-          el("td", { class: "n", "data-label": "Jumlah fisik" }, inp)
-        ]);
-        badan.appendChild(tr);
-      });
-
-      var tabel = el("table", { class: "kartu" }, [kepala, badan]);
-      area.appendChild(el("div", { class: "daftar" }, [el("div", { class: "tabel-gulir" }, [tabel])]));
-
-      // Info jumlah
-      var sudahDiisi = items.filter(function (b) {
-        return progress[b.id] !== undefined && progress[b.id] !== "";
-      }).length;
-      var infoIsi = el("p", { class: "status-koneksi" },
-        sudahDiisi + " dari " + items.length + " batch sudah diisi.");
-      area.appendChild(infoIsi);
-
-      // Tombol simpan
-      var pesanSimpan = el("p", { class: "pesan", hidden: true });
-      var tombolSimpan = el("button", { type: "button", class: "btn btn-utama" }, "Simpan dan lihat selisih");
-      tombolSimpan.addEventListener("click", function () {
-        // Baca semua nilai terkini dari input
-        items.forEach(function (b) {
-          var v = inputMap[b.id] ? inputMap[b.id].value : "";
-          progress[b.id] = v !== "" ? Number(v) : "";
+        items.sort(function (a, b) {
+          var oa = (a.expand && (a.expand.obat || a.expand.daftar_obat)) || {};
+          var ob = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
+          var ua = urutObat(oa.kode), ub = urutObat(ob.kode);
+          if (ua[0] !== ub[0]) return ua[0] - ub[0];
+          if (ua[2] < ub[2]) return -1;
+          if (ua[2] > ub[2]) return 1;
+          return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
         });
-        try { localStorage.setItem(kunciLS, JSON.stringify(progress)); } catch (x) {}
 
-        // Hitung berapa yang masih kosong
-        var kosong = items.filter(function (b) {
-          return progress[b.id] === undefined || progress[b.id] === "";
-        }).length;
-
-        if (kosong > 0) {
-          pesanSimpan.textContent = kosong + " batch belum diisi. Lanjutkan atau biarkan kosong untuk yang tidak dihitung.";
-          pesanSimpan.className = "pesan info";
-          pesanSimpan.hidden = false;
-          // Tetap izinkan lanjut dengan konfirmasi
-          tombolSimpan.textContent = "Tetap lanjut ke penyesuaian";
-          tombolSimpan.removeEventListener("click", arguments.callee);
-          tombolSimpan.addEventListener("click", function () {
-            location.hash = "#/stockopname/sesuaikan";
-          });
+        if (!items.length) {
+          area.appendChild(el("section", { class: "panel" }, [
+            el("p", { style: "margin:0" }, "Semua batch sudah melewati tanggal kedaluwarsa.")
+          ]));
           return;
         }
-        location.hash = "#/stockopname/sesuaikan";
+
+        var tersembunyi = d.items.length - items.length;
+        if (tersembunyi > 0) {
+          area.appendChild(el("p", { class: "status-koneksi" },
+            tersembunyi + " batch dengan ED yang sudah lewat tidak ditampilkan; di tab Penyesuaian dianggap fisik 0."));
+        }
+
+        var inputMap = {};
+
+        var kepala = el("thead", {}, [el("tr", {}, [
+          el("th", {}, "Nama obat"),
+          el("th", {}, "No. batch"),
+          el("th", {}, "ED"),
+          el("th", { class: "n" }, "Stok sistem"),
+          el("th", { class: "n" }, "Jumlah fisik")
+        ])]);
+
+        var badan = el("tbody");
+        items.forEach(function (b, idx) {
+          var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
+          var nilaiSimpan = progress[b.id] !== undefined ? progress[b.id] : "";
+
+          var inp = el("input", {
+            type: "number", min: "0", step: "1",
+            class: "inp-fisik", "data-id": b.id,
+            value: String(nilaiSimpan),
+            inputmode: "numeric",
+            "aria-label": "Jumlah fisik " + (obat.nama_utama || b.id)
+          });
+          inputMap[b.id] = inp;
+
+          inp.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              var kunci = Object.keys(inputMap);
+              var posisi = kunci.indexOf(b.id);
+              if (posisi < kunci.length - 1) {
+                inputMap[kunci[posisi + 1]].focus();
+                inputMap[kunci[posisi + 1]].select();
+              }
+            }
+            if (e.key !== "Tab") {
+              setTimeout(function () {
+                try {
+                  progress[b.id] = inp.value !== "" ? Number(inp.value) : "";
+                  localStorage.setItem(kunciLS, JSON.stringify(progress));
+                } catch (x) {}
+              }, 0);
+            }
+          });
+          inp.addEventListener("change", function () {
+            try {
+              progress[b.id] = inp.value !== "" ? Number(inp.value) : "";
+              localStorage.setItem(kunciLS, JSON.stringify(progress));
+            } catch (x) {}
+          });
+
+          var edBulanIni = false;
+          if (b.expired_date) {
+            var d2 = new Date(b.expired_date);
+            var skrg = new Date();
+            edBulanIni = d2.getFullYear() === skrg.getFullYear() && d2.getMonth() === skrg.getMonth();
+          }
+          var tr = el("tr", { class: edBulanIni ? "terpilih" : "" }, [
+            el("td", { class: "utama", "data-label": "" }, obat.nama_utama || "-"),
+            el("td", { "data-label": "No. batch" }, b.nomor_batch || "-"),
+            el("td", { "data-label": "ED" }, formatED(b.expired_date)),
+            el("td", { class: "n", "data-label": "Stok sistem" },
+              b._stok_sistem !== undefined ? String(b._stok_sistem) : "-"),
+            el("td", { class: "n", "data-label": "Jumlah fisik" }, inp)
+          ]);
+          badan.appendChild(tr);
+        });
+
+        var tabel = el("table", { class: "kartu" }, [kepala, badan]);
+        area.appendChild(el("div", { class: "daftar" }, [el("div", { class: "tabel-gulir" }, [tabel])]));
+
+        var sudahDiisi = items.filter(function (b) {
+          return progress[b.id] !== undefined && progress[b.id] !== "";
+        }).length;
+        var infoIsi = el("p", { class: "status-koneksi" },
+          sudahDiisi + " dari " + items.length + " batch sudah diisi.");
+        area.appendChild(infoIsi);
+
+        var pesanSimpan = el("p", { class: "pesan", hidden: true });
+        var tombolSimpan = el("button", { type: "button", class: "btn btn-utama" }, "Simpan dan lihat selisih");
+        tombolSimpan.addEventListener("click", function () {
+          items.forEach(function (b) {
+            var v = inputMap[b.id] ? inputMap[b.id].value : "";
+            progress[b.id] = v !== "" ? Number(v) : "";
+          });
+          try { localStorage.setItem(kunciLS, JSON.stringify(progress)); } catch (x) {}
+
+          var kosong = items.filter(function (b) {
+            return progress[b.id] === undefined || progress[b.id] === "";
+          }).length;
+
+          if (kosong > 0) {
+            pesanSimpan.textContent = kosong + " batch belum diisi. Lanjutkan atau biarkan kosong untuk yang tidak dihitung.";
+            pesanSimpan.className = "pesan info";
+            pesanSimpan.hidden = false;
+            tombolSimpan.textContent = "Tetap lanjut ke penyesuaian";
+            tombolSimpan.removeEventListener("click", arguments.callee);
+            tombolSimpan.addEventListener("click", function () {
+              location.hash = "#/stockopname/sesuaikan";
+            });
+            return;
+          }
+          location.hash = "#/stockopname/sesuaikan";
+        });
+
+        var tombolTambahBatch = el("button", { type: "button", class: "btn btn-garis" }, "+ Batch Baru");
+        tombolTambahBatch.addEventListener("click", function () {
+          bukaTambahBatch(area, kunciLS, function () { tahapHitung(area, kunciLS); });
+        });
+
+        area.appendChild(el("div", { class: "bilah-simpan" }, [pesanSimpan, tombolTambahBatch, tombolSimpan]));
+
       });
-
-      // Tombol tambah batch baru (untuk batch yang missed/baru ketahuan saat SO)
-      var tombolTambahBatch = el("button", { type: "button", class: "btn btn-garis" }, "+ Batch Baru");
-      tombolTambahBatch.addEventListener("click", function () {
-        bukaTambahBatch(area, kunciLS, function () { tahapHitung(area, kunciLS); });
-      });
-
-      area.appendChild(el("div", { class: "bilah-simpan" }, [pesanSimpan, tombolTambahBatch, tombolSimpan]));
-
-      }); // tutup Promise.resolve().then(...)
 
     }, function (err) {
       tanganiGalat(err, function () { tahapHitung(area, kunciLS); }, area);
     });
   }
 
-  // Modal tambah batch baru saat stockopname
   function bukaTambahBatch(areaSO, kunciLS, onSelesai) {
-    // Muat daftar obat aktif yang pakai_batch
     var overlay = el("div", { class: "modal-overlay" });
     var kotak = el("div", { class: "modal-kotak panel" });
     overlay.appendChild(kotak);
@@ -1399,7 +1381,6 @@
         var obatList = dObat.items;
         var state = { obatId: "", obatNama: "" };
 
-        // Cari obat
         var labelCari = el("label", { class: "field-label" }, "Nama obat");
         var cariObat = buatCariObat(obatList, function (o) {
           state.obatId = o.id;
@@ -1428,7 +1409,6 @@
           tombolSimpanBatch.disabled = true;
           tombolSimpanBatch.textContent = "Menyimpan...";
 
-          // Konversi YYYY-MM ke YYYY-MM-01 untuk field date PocketBase
           var edVal = inpED.value ? inpED.value + "-01" : "";
 
           LPLPO.buat("batch", {
@@ -1438,14 +1418,13 @@
             stok_awal: Number(jumlah),
             aktif: true
           }).then(function (rec) {
-            // Simpan juga ke progress localStorage supaya terhitung di Penyesuaian
             var progress = {};
             try { progress = JSON.parse(localStorage.getItem(kunciLS) || "{}"); } catch (x) {}
             progress[rec.id] = Number(jumlah);
             try { localStorage.setItem(kunciLS, JSON.stringify(progress)); } catch (x) {}
 
             tutup();
-            onSelesai(); // reload tab Penghitungan
+            onSelesai();
           }, function (err) {
             tombolSimpanBatch.disabled = false;
             tombolSimpanBatch.textContent = "Simpan batch";
@@ -1483,7 +1462,6 @@
       return;
     }
 
-    // [PERUBAHAN 28 Okt] Batch ED-lewat tidak dihitung di tab 1; stok fisiknya dianggap 0.
     function fisikOtomatis(b) {
       var f = progress[b.id];
       return (f === undefined || f === "") && edLewat(b.expired_date);
@@ -1492,7 +1470,7 @@
       var f = progress[b.id];
       if (f !== undefined && f !== "") return Number(f);
       if (edLewat(b.expired_date)) return 0;
-      return null; // belum dihitung
+      return null;
     }
 
     area.appendChild(el("p", { class: "status-koneksi" }, "Memuat data untuk penyesuaian..."));
@@ -1502,8 +1480,6 @@
       sort: "nomor_batch",
       expand: "obat"
     }).then(function (d) {
-      // Gunakan stok_sistem yang sudah ada di batch (diupdate setiap mutasi)
-      // Fallback ke stok_awal kalau stok_sistem belum diisi
       d.items.forEach(function (b) {
         b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined)
           ? b.stok_sistem
@@ -1518,7 +1494,6 @@
           soPesanTerakhir = "";
         }
 
-        // Hanya tampilkan yang ada selisih (fisik berbeda dari stok sistem)
         var selisih = d.items.filter(function (b) {
           var fisik = fisikDari(b);
           if (fisik === null) return false;
@@ -1526,230 +1501,231 @@
           return fisik !== sistem;
         });
 
-      // Sort by urutan kategori LPLPO, lalu kode, lalu nomor_batch
-      selisih.sort(function (a, b) {
-        var oa = (a.expand && (a.expand.obat || a.expand.daftar_obat)) || {};
-        var ob = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
-        var ua = urutObat(oa.kode), ub = urutObat(ob.kode);
-        if (ua[0] !== ub[0]) return ua[0] - ub[0];
-        if (ua[2] < ub[2]) return -1;
-        if (ua[2] > ub[2]) return 1;
-        return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
-      });
+        var URUT_KAT = ["A","T","B","F","D","C","E","G","H","I","J","K","L","M","V","W","N","O","P","Q","R","S","X","U","Y"];
+        function urutObat(kode) {
+          if (!kode) return [99, "", ""];
+          var bagian = kode.split("-");
+          var kat = bagian[0] || "";
+          var idx = URUT_KAT.indexOf(kat);
+          return [idx === -1 ? 98 : idx, kat, kode];
+        }
 
-      if (!selisih.length) {
-        area.appendChild(el("section", { class: "panel" }, [
-          el("p", { style: "margin:0" }, "Tidak ada selisih. Semua stok cocok dengan hitungan fisik. 🎉")
-        ]));
-        return;
-      }
-
-      area.appendChild(el("p", {}, selisih.length + " batch memiliki selisih:"));
-
-      selisih.forEach(function (b) {
-        var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
-        var fisik = fisikDari(b);
-        var sistem = b._stok_sistem;
-        var diff = fisik - sistem;
-
-        var kartu = el("div", { class: "panel so-kartu" });
-
-        // Kepala kartu
-        var kepalaKartu = el("div", { class: "so-kepala" }, [
-          el("div", { class: "so-nama" }, [
-            el("strong", {}, obat.nama_utama || "-"),
-            el("span", { class: "pudar" }, " · " + (b.nomor_batch || "tanpa batch") + " · ED " + formatED(b.expired_date))
-          ]),
-          el("div", { class: "so-selisih " + (diff > 0 ? "lebih" : "kurang") }, [
-            el("span", {}, (diff > 0 ? "+" : "") + diff),
-            el("span", { class: "pudar so-satuan" }, " " + (obat.satuan || ""))
-          ])
-        ]);
-        kartu.appendChild(kepalaKartu);
-
-        // Stok sistem vs fisik
-        var ringkasan = el("div", { class: "so-ringkasan" }, [
-          el("span", { class: "pudar" }, "Sistem: " + sistem + "  →  Fisik: " + fisik + (fisikOtomatis(b) ? " (ED lewat, dianggap 0)" : ""))
-        ]);
-        kartu.appendChild(ringkasan);
-
-        // Area transaksi (muncul setelah klik)
-        var areaTransaksi = el("div", { class: "so-transaksi", hidden: true });
-
-        var tombolDetail = el("button", { type: "button", class: "btn btn-garis so-btn-detail" }, "Lihat transaksi batch ini");
-        tombolDetail.addEventListener("click", function () {
-          if (!areaTransaksi.hidden) {
-            areaTransaksi.hidden = true;
-            tombolDetail.textContent = "Lihat transaksi batch ini";
-            return;
-          }
-          tombolDetail.textContent = "Memuat...";
-          tombolDetail.disabled = true;
-
-          // [PERUBAHAN 28 Okt] Semua transaksi OBAT ini (semua batch dan yang tanpa batch), terbaru di atas.
-          Promise.all([
-            daftarSemua("mutasi", { filter: 'obat = "' + obat.id + '"', sort: "-tanggal", expand: "unit,batch", perPage: 200 }),
-            daftarSemua("batch", { filter: 'obat = "' + obat.id + '"', sort: "nomor_batch", perPage: 200 })
-          ]).then(function (hasil) {
-            var semuaTx = hasil[0].items;
-            var batchObat = hasil[1].items;
-            areaTransaksi.textContent = "";
-            areaTransaksi.hidden = false;
-            tombolDetail.textContent = "Sembunyikan transaksi";
-            tombolDetail.disabled = false;
-
-            function labelBatch(bt) {
-              if (!bt) return "tanpa batch";
-              return (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "");
-            }
-            function namaBatchTx(tx) {
-              if (!tx.batch) return "tanpa batch";
-              return labelBatch((tx.expand && tx.expand.batch) || batchObat.filter(function (x) { return x.id === tx.batch; })[0]);
-            }
-            function opsiBatch(termasukKosong) {
-              var daftar = termasukKosong ? [el("option", { value: "" }, "— tanpa relasi batch —")] : [];
-              batchObat.forEach(function (bt) {
-                daftar.push(el("option", { value: bt.id }, labelBatch(bt) + " · stok " + (bt.stok !== undefined && bt.stok !== null ? bt.stok : 0)));
-              });
-              return daftar;
-            }
-
-            var pilTampil = el("select", { class: "so-pilih-mutasi", "aria-label": "Tampilkan transaksi" }, [
-              el("option", { value: "semua" }, "Semua batch obat ini (" + semuaTx.length + " transaksi)"),
-              el("option", { value: "ini" }, "Batch ini saja")
-            ]);
-            var wadahDaftar = el("div", {});
-            var wadahEdit = el("div", {});
-            areaTransaksi.appendChild(pilTampil);
-            areaTransaksi.appendChild(wadahDaftar);
-            areaTransaksi.appendChild(wadahEdit);
-
-            function gambar() {
-              var tampil = pilTampil.value === "ini"
-                ? semuaTx.filter(function (tx) { return tx.batch === b.id; })
-                : semuaTx;
-              wadahDaftar.textContent = "";
-              wadahEdit.textContent = "";
-
-              if (!tampil.length) {
-                wadahDaftar.appendChild(el("p", { class: "pudar", style: "margin:0 0 8px" }, "Tidak ada transaksi."));
-              } else {
-                wadahDaftar.appendChild(el("div", { class: "so-tx-daftar" }, tampil.map(function (tx) {
-                  var unitNama = (tx.expand && tx.expand.unit && tx.expand.unit.nama) || tx.unit || "-";
-                  return el("div", { class: "so-tx-baris", style: tx.batch === b.id ? "font-weight:600" : "" }, [
-                    el("span", { class: "pudar" }, tx.tanggal ? tx.tanggal.slice(0, 10) : "-"),
-                    el("span", {}, (tx.jenis === "masuk" ? "Masuk dari " : "Keluar ke ") + unitNama + " · batch " + namaBatchTx(tx)),
-                    el("span", { class: tx.jenis === "masuk" ? "so-plus" : "so-minus" },
-                      (tx.jenis === "masuk" ? "+" : "-") + tx.jumlah)
-                  ]);
-                })));
-                wadahDaftar.appendChild(el("p", { class: "pudar", style: "margin:4px 0 8px" }, "Tebal = batch yang sedang dibuka."));
-              }
-
-              if (!tampil.length) return;
-
-              // Form edit mutasi: ubah jumlah, tanggal, dan batch, atau hapus.
-              var pilMutasi = el("select", { class: "so-pilih-mutasi" },
-                [el("option", { value: "" }, "— Pilih mutasi untuk diedit —")]
-                .concat(tampil.map(function (tx) {
-                  var unitNama = (tx.expand && tx.expand.unit && tx.expand.unit.nama) || "-";
-                  return el("option", { value: tx.id },
-                    (tx.tanggal ? tx.tanggal.slice(0, 10) : "") + " · " +
-                    (tx.jenis === "masuk" ? "Masuk" : "Keluar") + " " + tx.jumlah + " · " + unitNama + " · " + namaBatchTx(tx));
-                }))
-              );
-              var inpEditJumlah = el("input", { type: "number", min: "1", step: "1", class: "so-inp-edit", placeholder: "Jumlah baru", inputmode: "numeric", "aria-label": "Jumlah baru" });
-              var inpEditTanggal = el("input", { type: "date", class: "so-inp-edit", "aria-label": "Tanggal mutasi" });
-              var pilEditBatch = el("select", { class: "so-pilih-mutasi", "aria-label": "Batch mutasi" }, opsiBatch(true));
-              var tombolEdit = el("button", { type: "button", class: "btn btn-garis", disabled: true }, "Simpan perubahan");
-              var tombolHapus = el("button", { type: "button", class: "btn btn-garis", disabled: true }, "Hapus mutasi");
-              var pesanEdit = el("p", { class: "pesan", hidden: true });
-
-              pilMutasi.addEventListener("change", function () {
-                var ada = !!pilMutasi.value;
-                tombolEdit.disabled = !ada;
-                tombolHapus.disabled = !ada;
-                if (ada) {
-                  var txDipilih = tampil.filter(function (t) { return t.id === pilMutasi.value; })[0];
-                  if (txDipilih) {
-                    inpEditJumlah.value = txDipilih.jumlah;
-                    inpEditTanggal.value = txDipilih.tanggal ? txDipilih.tanggal.slice(0, 10) : "";
-                    pilEditBatch.value = txDipilih.batch || "";
-                  }
-                }
-              });
-
-              function galatEdit(err, tombol, teksTombol) {
-                pesanEdit.textContent = (err && (err.pesan || err.message)) || "Gagal menyimpan.";
-                pesanEdit.className = "pesan galat"; pesanEdit.hidden = false;
-                tombol.disabled = false; tombol.textContent = teksTombol;
-              }
-
-              tombolEdit.addEventListener("click", function () {
-                var idTx = pilMutasi.value;
-                var jumlahBaru = Number(inpEditJumlah.value);
-                var tanggalBaru = inpEditTanggal.value;
-                if (!idTx || !jumlahBaru || jumlahBaru < 1 || !tanggalBaru) {
-                  pesanEdit.textContent = "Pilih mutasi, isi jumlah baru, dan isi tanggal.";
-                  pesanEdit.className = "pesan galat"; pesanEdit.hidden = false; return;
-                }
-                tombolEdit.disabled = true; tombolEdit.textContent = "Menyimpan...";
-                LPLPO.ubah("mutasi", idTx, { jumlah: jumlahBaru, tanggal: tanggalBaru, batch: pilEditBatch.value }).then(function () {
-                  soPesanTerakhir = "Mutasi diperbarui.";
-                  tahapSesuaikan(area, kunciLS);
-                }, function (err) { galatEdit(err, tombolEdit, "Simpan perubahan"); });
-              });
-
-              tombolHapus.addEventListener("click", function () {
-                var idTx = pilMutasi.value;
-                if (!idTx) return;
-                var teksPilihan = pilMutasi.options[pilMutasi.selectedIndex].textContent;
-                if (!window.confirm("Hapus mutasi ini?\n" + teksPilihan + "\n\nTidak bisa dibatalkan.")) return;
-                tombolHapus.disabled = true; tombolHapus.textContent = "Menghapus...";
-                hapusRecord("mutasi", idTx).then(function () {
-                  soPesanTerakhir = "Mutasi dihapus.";
-                  tahapSesuaikan(area, kunciLS);
-                }, function (err) { galatEdit(err, tombolHapus, "Hapus mutasi"); });
-              });
-
-              wadahEdit.appendChild(el("div", { class: "so-form-edit" }, [
-                el("p", { class: "pudar", style: "margin:0 0 8px" }, "Edit, pindahkan batch, atau hapus mutasi:"),
-                pilMutasi, inpEditJumlah, inpEditTanggal, pilEditBatch, tombolEdit, tombolHapus, pesanEdit
-              ]));
-            }
-
-            pilTampil.addEventListener("change", gambar);
-            gambar();
-
-            // Form tambah mutasi baru (masuk atau keluar sesuai tipe unit)
-            muatUnitUntukSO(areaTransaksi, b, obat, batchObat, function (pesan) {
-              soPesanTerakhir = pesan;
-              tahapSesuaikan(area, kunciLS);
-            });
-
-          }, function (err) {
-            areaTransaksi.textContent = "";
-            areaTransaksi.hidden = false;
-            areaTransaksi.appendChild(el("p", { class: "pesan galat" }, (err && err.pesan) || "Gagal memuat transaksi."));
-            tombolDetail.textContent = "Lihat transaksi batch ini";
-            tombolDetail.disabled = false;
-          });
+        selisih.sort(function (a, b) {
+          var oa = (a.expand && (a.expand.obat || a.expand.daftar_obat)) || {};
+          var ob = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
+          var ua = urutObat(oa.kode), ub = urutObat(ob.kode);
+          if (ua[0] !== ub[0]) return ua[0] - ub[0];
+          if (ua[2] < ub[2]) return -1;
+          if (ua[2] > ub[2]) return 1;
+          return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
         });
 
-        kartu.appendChild(tombolDetail);
-        kartu.appendChild(areaTransaksi);
-        area.appendChild(kartu);
-      });
+        if (!selisih.length) {
+          area.appendChild(el("section", { class: "panel" }, [
+            el("p", { style: "margin:0" }, "Tidak ada selisih. Semua stok cocok dengan hitungan fisik. 🎉")
+          ]));
+          return;
+        }
 
-      }); // tutup Promise.resolve().then(...)
+        area.appendChild(el("p", {}, selisih.length + " batch memiliki selisih:"));
+
+        selisih.forEach(function (b) {
+          var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
+          var fisik = fisikDari(b);
+          var sistem = b._stok_sistem;
+          var diff = fisik - sistem;
+
+          var kartu = el("div", { class: "panel so-kartu" });
+
+          var kepalaKartu = el("div", { class: "so-kepala" }, [
+            el("div", { class: "so-nama" }, [
+              el("strong", {}, obat.nama_utama || "-"),
+              el("span", { class: "pudar" }, " · " + (b.nomor_batch || "tanpa batch") + " · ED " + formatED(b.expired_date))
+            ]),
+            el("div", { class: "so-selisih " + (diff > 0 ? "lebih" : "kurang") }, [
+              el("span", {}, (diff > 0 ? "+" : "") + diff),
+              el("span", { class: "pudar so-satuan" }, " " + (obat.satuan || ""))
+            ])
+          ]);
+          kartu.appendChild(kepalaKartu);
+
+          var ringkasan = el("div", { class: "so-ringkasan" }, [
+            el("span", { class: "pudar" }, "Sistem: " + sistem + "  →  Fisik: " + fisik + (fisikOtomatis(b) ? " (ED lewat, dianggap 0)" : ""))
+          ]);
+          kartu.appendChild(ringkasan);
+
+          var areaTransaksi = el("div", { class: "so-transaksi", hidden: true });
+
+          var tombolDetail = el("button", { type: "button", class: "btn btn-garis so-btn-detail" }, "Lihat transaksi batch ini");
+          tombolDetail.addEventListener("click", function () {
+            if (!areaTransaksi.hidden) {
+              areaTransaksi.hidden = true;
+              tombolDetail.textContent = "Lihat transaksi batch ini";
+              return;
+            }
+            tombolDetail.textContent = "Memuat...";
+            tombolDetail.disabled = true;
+
+            Promise.all([
+              daftarSemua("mutasi", { filter: 'obat = "' + obat.id + '"', sort: "-tanggal", expand: "unit,batch", perPage: 200 }),
+              daftarSemua("batch", { filter: 'obat = "' + obat.id + '"', sort: "nomor_batch", perPage: 200 })
+            ]).then(function (hasil) {
+              var semuaTx = hasil[0].items;
+              var batchObat = hasil[1].items;
+              areaTransaksi.textContent = "";
+              areaTransaksi.hidden = false;
+              tombolDetail.textContent = "Sembunyikan transaksi";
+              tombolDetail.disabled = false;
+
+              function labelBatch(bt) {
+                if (!bt) return "tanpa batch";
+                return (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "");
+              }
+              function namaBatchTx(tx) {
+                if (!tx.batch) return "tanpa batch";
+                return labelBatch((tx.expand && tx.expand.batch) || batchObat.filter(function (x) { return x.id === tx.batch; })[0]);
+              }
+              function opsiBatch(termasukKosong) {
+                var daftar = termasukKosong ? [el("option", { value: "" }, "— tanpa relasi batch —")] : [];
+                batchObat.forEach(function (bt) {
+                  daftar.push(el("option", { value: bt.id }, labelBatch(bt) + " · stok " + (bt.stok !== undefined && bt.stok !== null ? bt.stok : 0)));
+                });
+                return daftar;
+              }
+
+              var pilTampil = el("select", { class: "so-pilih-mutasi", "aria-label": "Tampilkan transaksi" }, [
+                el("option", { value: "semua" }, "Semua batch obat ini (" + semuaTx.length + " transaksi)"),
+                el("option", { value: "ini" }, "Batch ini saja")
+              ]);
+              var wadahDaftar = el("div", {});
+              var wadahEdit = el("div", {});
+              areaTransaksi.appendChild(pilTampil);
+              areaTransaksi.appendChild(wadahDaftar);
+              areaTransaksi.appendChild(wadahEdit);
+
+              function gambar() {
+                var tampil = pilTampil.value === "ini"
+                  ? semuaTx.filter(function (tx) { return tx.batch === b.id; })
+                  : semuaTx;
+                wadahDaftar.textContent = "";
+                wadahEdit.textContent = "";
+
+                if (!tampil.length) {
+                  wadahDaftar.appendChild(el("p", { class: "pudar", style: "margin:0 0 8px" }, "Tidak ada transaksi."));
+                } else {
+                  wadahDaftar.appendChild(el("div", { class: "so-tx-daftar" }, tampil.map(function (tx) {
+                    var unitNama = (tx.expand && tx.expand.unit && tx.expand.unit.nama) || tx.unit || "-";
+                    return el("div", { class: "so-tx-baris", style: tx.batch === b.id ? "font-weight:600" : "" }, [
+                      el("span", { class: "pudar" }, tx.tanggal ? tx.tanggal.slice(0, 10) : "-"),
+                      el("span", {}, (tx.jenis === "masuk" ? "Masuk dari " : "Keluar ke ") + unitNama + " · batch " + namaBatchTx(tx)),
+                      el("span", { class: tx.jenis === "masuk" ? "so-plus" : "so-minus" },
+                        (tx.jenis === "masuk" ? "+" : "-") + tx.jumlah)
+                    ]);
+                  })));
+                  wadahDaftar.appendChild(el("p", { class: "pudar", style: "margin:4px 0 8px" }, "Tebal = batch yang sedang dibuka."));
+                }
+
+                if (!tampil.length) return;
+
+                var pilMutasi = el("select", { class: "so-pilih-mutasi" },
+                  [el("option", { value: "" }, "— Pilih mutasi untuk diedit —")]
+                  .concat(tampil.map(function (tx) {
+                    var unitNama = (tx.expand && tx.expand.unit && tx.expand.unit.nama) || "-";
+                    return el("option", { value: tx.id },
+                      (tx.tanggal ? tx.tanggal.slice(0, 10) : "") + " · " +
+                      (tx.jenis === "masuk" ? "Masuk" : "Keluar") + " " + tx.jumlah + " · " + unitNama + " · " + namaBatchTx(tx));
+                  }))
+                );
+                var inpEditJumlah = el("input", { type: "number", min: "1", step: "1", class: "so-inp-edit", placeholder: "Jumlah baru", inputmode: "numeric", "aria-label": "Jumlah baru" });
+                var inpEditTanggal = el("input", { type: "date", class: "so-inp-edit", "aria-label": "Tanggal mutasi" });
+                var pilEditBatch = el("select", { class: "so-pilih-mutasi", "aria-label": "Batch mutasi" }, opsiBatch(true));
+                var tombolEdit = el("button", { type: "button", class: "btn btn-garis", disabled: true }, "Simpan perubahan");
+                var tombolHapus = el("button", { type: "button", class: "btn btn-garis", disabled: true }, "Hapus mutasi");
+                var pesanEdit = el("p", { class: "pesan", hidden: true });
+
+                pilMutasi.addEventListener("change", function () {
+                  var ada = !!pilMutasi.value;
+                  tombolEdit.disabled = !ada;
+                  tombolHapus.disabled = !ada;
+                  if (ada) {
+                    var txDipilih = tampil.filter(function (t) { return t.id === pilMutasi.value; })[0];
+                    if (txDipilih) {
+                      inpEditJumlah.value = txDipilih.jumlah;
+                      inpEditTanggal.value = txDipilih.tanggal ? txDipilih.tanggal.slice(0, 10) : "";
+                      pilEditBatch.value = txDipilih.batch || "";
+                    }
+                  }
+                });
+
+                function galatEdit(err, tombol, teksTombol) {
+                  pesanEdit.textContent = (err && (err.pesan || err.message)) || "Gagal menyimpan.";
+                  pesanEdit.className = "pesan galat"; pesanEdit.hidden = false;
+                  tombol.disabled = false; tombol.textContent = teksTombol;
+                }
+
+                tombolEdit.addEventListener("click", function () {
+                  var idTx = pilMutasi.value;
+                  var jumlahBaru = Number(inpEditJumlah.value);
+                  var tanggalBaru = inpEditTanggal.value;
+                  if (!idTx || !jumlahBaru || jumlahBaru < 1 || !tanggalBaru) {
+                    pesanEdit.textContent = "Pilih mutasi, isi jumlah baru, dan isi tanggal.";
+                    pesanEdit.className = "pesan galat"; pesanEdit.hidden = false; return;
+                  }
+                  tombolEdit.disabled = true; tombolEdit.textContent = "Menyimpan...";
+                  LPLPO.ubah("mutasi", idTx, { jumlah: jumlahBaru, tanggal: tanggalBaru, batch: pilEditBatch.value }).then(function () {
+                    soPesanTerakhir = "Mutasi diperbarui.";
+                    tahapSesuaikan(area, kunciLS);
+                  }, function (err) { galatEdit(err, tombolEdit, "Simpan perubahan"); });
+                });
+
+                tombolHapus.addEventListener("click", function () {
+                  var idTx = pilMutasi.value;
+                  if (!idTx) return;
+                  var teksPilihan = pilMutasi.options[pilMutasi.selectedIndex].textContent;
+                  if (!window.confirm("Hapus mutasi ini?\n" + teksPilihan + "\n\nTidak bisa dibatalkan.")) return;
+                  tombolHapus.disabled = true; tombolHapus.textContent = "Menghapus...";
+                  hapusRecord("mutasi", idTx).then(function () {
+                    soPesanTerakhir = "Mutasi dihapus.";
+                    tahapSesuaikan(area, kunciLS);
+                  }, function (err) { galatEdit(err, tombolHapus, "Hapus mutasi"); });
+                });
+
+                wadahEdit.appendChild(el("div", { class: "so-form-edit" }, [
+                  el("p", { class: "pudar", style: "margin:0 0 8px" }, "Edit, pindahkan batch, atau hapus mutasi:"),
+                  pilMutasi, inpEditJumlah, inpEditTanggal, pilEditBatch, tombolEdit, tombolHapus, pesanEdit
+                ]));
+              }
+
+              pilTampil.addEventListener("change", gambar);
+              gambar();
+
+              muatUnitUntukSO(areaTransaksi, b, obat, batchObat, function (pesan) {
+                soPesanTerakhir = pesan;
+                tahapSesuaikan(area, kunciLS);
+              });
+
+            }, function (err) {
+              areaTransaksi.textContent = "";
+              areaTransaksi.hidden = false;
+              areaTransaksi.appendChild(el("p", { class: "pesan galat" }, (err && err.pesan) || "Gagal memuat transaksi."));
+              tombolDetail.textContent = "Lihat transaksi batch ini";
+              tombolDetail.disabled = false;
+            });
+          });
+
+          kartu.appendChild(tombolDetail);
+          kartu.appendChild(areaTransaksi);
+          area.appendChild(kartu);
+        });
+
+      });
 
     }, function (err) {
       tanganiGalat(err, function () { tahapSesuaikan(area, kunciLS); }, area);
     });
   }
 
-  // [PERUBAHAN 28 Okt] Tambah mutasi baru: jenis ditentukan dari tipe unit
-  // (unit sumber/IFK = masuk, unit penerima = keluar), tanggal bisa dipilih.
+  // Tambah mutasi baru: jenis ditentukan dari tipe unit
   function muatUnitUntukSO(areaTransaksi, batch, obat, batchObat, onSelesai) {
     var bagianTambah = el("div", { class: "so-form-tambah" });
     bagianTambah.appendChild(el("p", { class: "pudar", style: "margin:0 0 8px" }, "Atau tambah mutasi baru:"));
@@ -1811,14 +1787,16 @@
         pesanTambah.className = "pesan galat"; pesanTambah.hidden = false; return;
       }
       tombolTambah.disabled = true; tombolTambah.textContent = "Menyimpan...";
+      // FIX: field nama benar (obat, catatan, status)
       LPLPO.buat("mutasi", {
-        daftar_obat: obat.id,
+        obat: obat.id,
         batch: pilBatchTambah.value || undefined,
         unit: unitId,
         jenis: jenis,
         jumlah: jumlah,
         tanggal: tanggal,
-        keterangan: "Koreksi stockopname"
+        status: "confirmed",
+        catatan: "Koreksi stockopname"
       }).then(function () {
         onSelesai("Mutasi baru ditambahkan (" + (jenis === "masuk" ? "masuk" : "keluar") + " " + jumlah + ").");
       }, function (err) {
@@ -1826,6 +1804,184 @@
         pesanTambah.className = "pesan galat"; pesanTambah.hidden = false;
         tombolTambah.disabled = false; tombolTambah.textContent = "Tambah mutasi";
       });
+    });
+  }
+
+  // ---------- Halaman: Kartu stok ----------
+
+  function renderKartuStok() {
+    isi.textContent = "";
+    isi.appendChild(judul("Kartu stok", "Riwayat mutasi dan saldo berjalan per obat."));
+
+    var area = el("div", { class: "batas-dalam" });
+    isi.appendChild(area);
+
+    area.appendChild(el("p", { class: "status-koneksi" }, "Memuat daftar obat..."));
+
+    LPLPO.daftar("daftar_obat", {
+      perPage: 500, sort: "kode",
+      filter: "aktif = true"
+    }).then(function (d) {
+      area.textContent = "";
+
+      var obatList = d.items;
+
+      var labelSatuan = el("span", { class: "status-koneksi ks-satuan-label" }, "");
+
+      var cariEl = buatCariObat(obatList, function (obat) {
+        labelSatuan.textContent = obat.satuan ? "Satuan: " + obat.satuan : "";
+        muatKartuStok(obat, areaHasil);
+      });
+
+      area.appendChild(el("div", { class: "ks-cari-baris" }, [cariEl, labelSatuan]));
+
+      var areaHasil = el("div", { class: "batas-dalam" }, [
+        el("p", { class: "status-koneksi" }, "Pilih obat untuk melihat kartu stok.")
+      ]);
+      area.appendChild(areaHasil);
+
+    }, function (err) {
+      tanganiGalat(err, renderKartuStok, area);
+    });
+  }
+
+  function muatKartuStok(obat, areaHasil) {
+    areaHasil.textContent = "";
+    areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Memuat transaksi..."));
+
+    daftarSemua("mutasi", {
+      perPage: 200,
+      sort: "tanggal,id",
+      filter: 'obat = "' + obat.id + '" && status = "confirmed"',
+      expand: "unit,batch"
+    }).then(function (d) {
+      areaHasil.textContent = "";
+      var items = d.items;
+
+      if (!items.length) {
+        areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Belum ada transaksi untuk obat ini."));
+        return;
+      }
+
+      // Hitung sisa stok berjalan
+      var sisa = 0;
+      var baris = items.map(function (m) {
+        var jenis = m.jenis;
+        var jumlah = Number(m.jumlah) || 0;
+        if (jenis === "masuk") sisa += jumlah; else sisa -= jumlah;
+        var unit  = m.expand && m.expand.unit;
+        var batch = m.expand && m.expand.batch;
+        return {
+          tanggal:      m.tanggal,
+          unit_nama:    unit  ? unit.nama           : "—",
+          nomor_batch:  batch ? (batch.nomor_batch || "—") : (m.batch ? "?" : "—"),
+          expired_date: batch ? (batch.expired_date || "") : "",
+          masuk:        jenis === "masuk"  ? jumlah : null,
+          keluar:       jenis === "keluar" ? jumlah : null,
+          sisa:         sisa,
+          jenis:        jenis
+        };
+      });
+
+      // Info ringkas
+      var sisaTerakhir = baris[baris.length - 1].sisa;
+      var infoRingkas = el("div", { class: "ks-ringkas panel" }, [
+        el("div", { class: "ks-ringkas-item" }, [
+          el("span", { class: "ks-ringkas-label" }, "Obat"),
+          el("span", { class: "ks-ringkas-nilai" }, [
+            el("strong", {}, obat.nama_utama),
+            el("span", { class: "pudar" }, obat.kode ? " · " + obat.kode : "")
+          ])
+        ]),
+        el("div", { class: "ks-ringkas-item" }, [
+          el("span", { class: "ks-ringkas-label" }, "Sisa stok"),
+          el("span", {
+            class: "ks-ringkas-nilai ks-sisa-besar" + (sisaTerakhir < 0 ? " ks-negatif" : "")
+          }, formatAngka(sisaTerakhir) + " " + (obat.satuan || ""))
+        ]),
+        el("div", { class: "ks-ringkas-item" }, [
+          el("span", { class: "ks-ringkas-label" }, "Total transaksi"),
+          el("span", { class: "ks-ringkas-nilai" }, String(items.length))
+        ])
+      ]);
+
+      // Filter tombol
+      var filterAktif = "semua";
+      var tBody = el("tbody", {});
+
+      function gambarBaris() {
+        tBody.textContent = "";
+        var tampil = filterAktif === "semua" ? baris
+          : baris.filter(function (b) { return b.jenis === filterAktif; });
+
+        if (!tampil.length) {
+          tBody.appendChild(el("tr", {}, [
+            el("td", { colspan: "8", class: "ks-td-kosong" }, "Tidak ada transaksi.")
+          ]));
+          return;
+        }
+        tampil.forEach(function (b) {
+          tBody.appendChild(el("tr", { class: "ks-tr-" + b.jenis }, [
+            el("td", { "data-label": "Tanggal" }, b.tanggal ? b.tanggal.slice(0, 10) : "—"),
+            el("td", { "data-label": "Dokumen" }, ""),
+            el("td", { "data-label": "Dari / Ke" }, b.unit_nama),
+            el("td", { "data-label": "Batch", class: "pudar" }, b.nomor_batch),
+            el("td", { "data-label": "Kadaluwarsa", class: "pudar" }, b.expired_date ? formatED(b.expired_date) : "—"),
+            el("td", { "data-label": "Masuk", class: "n ks-masuk" }, b.masuk != null ? formatAngka(b.masuk) : ""),
+            el("td", { "data-label": "Keluar", class: "n ks-keluar" }, b.keluar != null ? formatAngka(b.keluar) : ""),
+            el("td", { "data-label": "Sisa Stok", class: "n" + (b.sisa < 0 ? " ks-negatif" : "") },
+              formatAngka(b.sisa))
+          ]));
+        });
+      }
+
+      function buatBtnFilter(val, label) {
+        var btn = el("button", {
+          type: "button",
+          class: "btn btn-garis ks-filter-btn" + (val === filterAktif ? " ks-filter-aktif" : "")
+        }, label);
+        btn.addEventListener("click", function () {
+          filterAktif = val;
+          filterBar.querySelectorAll(".ks-filter-btn").forEach(function (b) {
+            b.classList.toggle("ks-filter-aktif", b === btn);
+          });
+          gambarBaris();
+        });
+        return btn;
+      }
+
+      var filterBar = el("div", { class: "ks-filter-bar" }, [
+        buatBtnFilter("semua", "Semua"),
+        buatBtnFilter("masuk", "Masuk"),
+        buatBtnFilter("keluar", "Keluar")
+      ]);
+
+      // Tabel — 8 kolom termasuk Dokumen (kosong)
+      var thead = el("thead", {}, [
+        el("tr", {}, [
+          el("th", {}, "Tanggal"),
+          el("th", {}, "Dokumen"),
+          el("th", {}, "Dari / Ke"),
+          el("th", {}, "Batch"),
+          el("th", {}, "Kadaluwarsa"),
+          el("th", { class: "n" }, "Masuk"),
+          el("th", { class: "n" }, "Keluar"),
+          el("th", { class: "n" }, "Sisa Stok")
+        ])
+      ]);
+
+      gambarBaris();
+
+      var tabel = el("div", { class: "daftar ks-tabel-bungkus" }, [
+        el("div", { class: "tabel-gulir" }, [
+          el("table", { class: "kartu" }, [thead, tBody])
+        ])
+      ]);
+
+      areaHasil.append(infoRingkas, filterBar, tabel);
+
+    }, function (err) {
+      tanganiGalat(err, function () { muatKartuStok(obat, areaHasil); }, areaHasil);
     });
   }
 
@@ -1841,16 +1997,16 @@
   }
 
   var DAFTAR_HALAMAN = [
-    { id: "dashboard", menu: "Dashboard", judul: "Dashboard", render: renderDashboard },
-    { id: "penerimaan", menu: "Penerimaan", judul: "Penerimaan obat", render: renderPenerimaan },
-    { id: "pengeluaran", menu: "Pengeluaran", judul: "Pengeluaran obat", render: renderPengeluaran },
-    { id: "permintaan", menu: "Permintaan", judul: "Permintaan dari unit", info: "Periksa permintaan unit, lalu ubah menjadi pengeluaran." },
-    { id: "stockopname", menu: "Stockopname", judul: "Stockopname", render: renderStockopname },
-    { id: "kartu-stok", menu: "Kartu stok", judul: "Kartu stok", info: "Riwayat mutasi dan saldo berjalan per obat." },
-    { id: "stok", menu: "Stok dan batch", judul: "Stok dan batch", info: "Stok per batch dengan penanda ED." },
-    { id: "laporan", menu: "Laporan LPLPO", judul: "Laporan LPLPO", info: "Susun laporan bulanan dan ekspor ke Excel." },
-    { id: "master", menu: "Master data", judul: "Master data", render: renderMaster },
-    { id: "pengaturan", menu: "Pengaturan", judul: "Pengaturan", info: "Preferensi tampilan, profil, dan konfigurasi aplikasi." }
+    { id: "dashboard",   menu: "Dashboard",      judul: "Dashboard",           render: renderDashboard },
+    { id: "penerimaan",  menu: "Penerimaan",      judul: "Penerimaan obat",     render: renderPenerimaan },
+    { id: "pengeluaran", menu: "Pengeluaran",     judul: "Pengeluaran obat",    render: renderPengeluaran },
+    { id: "permintaan",  menu: "Permintaan",      judul: "Permintaan dari unit", info: "Periksa permintaan unit, lalu ubah menjadi pengeluaran." },
+    { id: "stockopname", menu: "Stockopname",     judul: "Stockopname",         render: renderStockopname },
+    { id: "kartu-stok",  menu: "Kartu stok",      judul: "Kartu stok",          render: renderKartuStok },
+    { id: "stok",        menu: "Stok dan batch",  judul: "Stok dan batch",      info: "Stok per batch dengan penanda ED." },
+    { id: "laporan",     menu: "Laporan LPLPO",   judul: "Laporan LPLPO",       info: "Susun laporan bulanan dan ekspor ke Excel." },
+    { id: "master",      menu: "Master data",     judul: "Master data",         render: renderMaster },
+    { id: "pengaturan",  menu: "Pengaturan",      judul: "Pengaturan",          info: "Preferensi tampilan, profil, dan konfigurasi aplikasi." }
   ];
 
   DAFTAR_HALAMAN.forEach(function (h) {
@@ -1919,12 +2075,10 @@
   tutupTombol.addEventListener("click", tutupDrawer);
   overlay.addEventListener("click", tutupDrawer);
 
-  // Tekan Escape juga menutup drawer
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && menuNav.classList.contains("terbuka")) tutupDrawer();
   });
 
-  // Klik item menu di HP: tutup drawer dulu, baru pindah halaman
   menu.addEventListener("click", function (e) {
     var a = e.target.closest("a");
     if (a && menuNav.classList.contains("terbuka")) tutupDrawer();
@@ -1937,7 +2091,6 @@
   }
   document.getElementById("email-admin").textContent = sesi.email || "";
 
-  // Periksa sesi ke server sebelum membuka halaman. Jika ditolak, kembali ke login.
   isi.appendChild(el("p", { class: "status-koneksi" }, "Menghubungkan ke server..."));
   LPLPO.segarkan().then(
     function () {
