@@ -86,7 +86,6 @@
     transform: translateX(-100%);
     transition: transform .22s ease;
     overflow-y: auto;
-    /* tetap background kartu, tidak ada flex-direction row */
     gap: 20px;
   }
   .menu.terbuka { transform: translateX(0); }
@@ -301,4 +300,88 @@
   table.kartu td.utama::before { content: none; }
   .pager .tombol { width: 100%; }
   .pager .tombol .btn { flex: 1 1 0; }
+}
+
+/* ---------- Kartu stok ---------- */
+.ks-cari-baris {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ks-cari-baris .cari-obat-bungkus {
+  flex: 1 1 260px;
+  max-width: 400px;
+}
+.ks-satuan-label { flex-shrink: 0; }
+
+.ks-ringkas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  padding: 14px 16px;
+}
+.ks-ringkas-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ks-ringkas-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--tinta-pudar);
+}
+.ks-ringkas-nilai {
+  font-family: var(--font-form);
+  font-size: 15px;
+  color: var(--tinta);
+}
+.ks-sisa-besar {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ks-filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ks-filter-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.ks-filter-aktif {
+  background: var(--hijau-teks);
+  color: #fff;
+  border-color: var(--hijau-teks);
+}
+
+/* Warna baris: masuk merah koral, keluar hitam normal */
+.ks-tr-masuk td { color: var(--koral); }
+
+/* Kolom angka masuk/keluar */
+.ks-masuk { color: var(--koral); font-variant-numeric: tabular-nums; }
+.ks-keluar { color: var(--tinta); font-variant-numeric: tabular-nums; }
+
+/* Kolom sisa stok selalu warna tinta, kecuali negatif */
+.ks-tr-masuk td:last-child,
+.ks-tr-keluar td:last-child {
+  color: var(--tinta);
+  font-weight: 600;
+}
+
+/* Saldo negatif */
+.ks-negatif {
+  color: var(--bahaya) !important;
+  font-weight: 700;
+}
+
+.ks-td-kosong {
+  text-align: center;
+  color: var(--tinta-pudar);
+  padding: 1.25rem;
+  font-size: 15px;
 }
