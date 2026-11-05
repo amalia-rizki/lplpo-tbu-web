@@ -914,7 +914,7 @@
           "data-id": bt.id
         }, [
           el("span", { class: "pnr-chip-no" }, bt.nomor_batch || "—"),
-          el("span", { class: "pnr-chip-ed" }, (bt.expired_date ? formatED(bt.expired_date) : "tanpa ED") + " \xb7 stok " + bt.stok)
+          el("span", { class: "pnr-chip-ed" }, (bt.expired_date ? formatED(bt.expired_date) : "tanpa ED") + " \xb7 stok " + (bt.stok_sistem != null ? bt.stok_sistem : (bt.stok_awal || 0)))
         ]);
         if (i === 0) { b.batchId = bt.id; }
         chip.addEventListener("click", function () {
@@ -1416,7 +1416,7 @@
             nomor_batch: inpBatch.value.trim(),
             expired_date: edVal,
             stok_awal: Number(jumlah),
-            aktif: true
+            stok_sistem: Number(jumlah)
           }).then(function (rec) {
             var progress = {};
             try { progress = JSON.parse(localStorage.getItem(kunciLS) || "{}"); } catch (x) {}
@@ -1588,7 +1588,7 @@
               function opsiBatch(termasukKosong) {
                 var daftar = termasukKosong ? [el("option", { value: "" }, "— tanpa relasi batch —")] : [];
                 batchObat.forEach(function (bt) {
-                  daftar.push(el("option", { value: bt.id }, labelBatch(bt) + " · stok " + (bt.stok !== undefined && bt.stok !== null ? bt.stok : 0)));
+                  daftar.push(el("option", { value: bt.id }, labelBatch(bt) + " · stok " + (bt.stok_sistem != null ? bt.stok_sistem : (bt.stok_awal || 0))));
                 });
                 return daftar;
               }
