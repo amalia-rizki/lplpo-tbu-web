@@ -385,3 +385,33 @@
   padding: 1.25rem;
   font-size: 15px;
 }
+
+/* SO: indikator autosave per baris */
+.so-ind {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-left: 6px; vertical-align: middle; flex-shrink: 0;
+  transition: background 0.2s;
+}
+.so-ind-ok      { background: var(--aman-teks, #22c55e); }
+.so-ind-loading { background: var(--kuning, #eab308); animation: so-denyut 0.8s infinite; }
+.so-ind-err     { background: var(--bahaya, #ef4444); }
+@keyframes so-denyut { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+/* SO: input inline di tab Penyesuaian */
+.so-inp-inline {
+  height: 32px; padding: 0 8px; width: 100px;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 15px; font-family: var(--font-form);
+  font-variant-numeric: tabular-nums; vertical-align: middle;
+}
+.so-inp-inline:focus { outline: 3px solid var(--hijau-teks); outline-offset: 1px; }
+
+/* SO: td kolom fisik — pastikan input + indikator sejajar */
+.so-td-fisik { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+
+/* SO: label status dan selisih wrap */
+.so-status-label { display: block; margin-bottom: 8px; font-size: 13px; }
+.so-selisih-wrap { display: flex; align-items: baseline; gap: 2px; }
+.so-selisih-val  { font-family: var(--font-form); font-size: 22px; font-weight: 800; white-space: nowrap; }
+.so-selisih-val.lebih  { color: var(--aman-teks); }
+.so-selisih-val.kurang { color: var(--bahaya); }
