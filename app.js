@@ -1850,12 +1850,21 @@
     areaHasil.textContent = "";
     areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Memuat transaksi..."));
 
-    daftarSemua("mutasi", {
-      perPage: 200,
-      sort: "tanggal,id",
-      filter: 'obat = "' + obat.id + '" && status = "confirmed"',
-      expand: "unit,batch"
-    }).then(function (d) {
+    Promise.all([
+      daftarSemua("mutasi", {
+        perPage: 200,
+        sort: "tanggal,id",
+        filter: 'obat = "' + obat.id + '" && status = "confirmed"',
+        expand: "unit,batch"
+      }),
+      daftarSemua("batch", {
+        perPage: 200,
+        filter: 'obat = "' + obat.id + '"',
+        fields: "id,stok_awal"
+      })
+    ]).then(function (hasil) {
+      var d      = hasil[0];
+      var dBatch = hasil[1];
       areaHasil.textContent = "";
       var items = d.items;
 
@@ -1864,8 +1873,10 @@
         return;
       }
 
-      // Hitung sisa stok berjalan
-      var sisa = 0;
+      // Hitung sisa stok berjalan, mulai dari total stok_awal semua batch
+      var sisa = (dBatch.items || []).reduce(function (acc, b) {
+        return acc + (Number(b.stok_awal) || 0);
+      }, 0);
       var baris = items.map(function (m) {
         var jenis = m.jenis;
         var jumlah = Number(m.jumlah) || 0;
