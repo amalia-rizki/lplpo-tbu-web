@@ -900,7 +900,7 @@
     LPLPO.daftar("batch", {
       perPage: 50,
       sort: "expired_date,nomor_batch",
-      filter: 'obat = "' + b.obatId + '" && stok_sistem > 0'
+      filter: 'obat = "' + b.obatId + '"'
     }).then(function (db) {
       batchScroll.textContent = "";
       if (!db.items.length) {
@@ -914,7 +914,7 @@
           "data-id": bt.id
         }, [
           el("span", { class: "pnr-chip-no" }, bt.nomor_batch || "—"),
-          el("span", { class: "pnr-chip-ed" }, (bt.expired_date ? formatED(bt.expired_date) : "tanpa ED") + " \xb7 stok " + bt.stok)
+          el("span", { class: "pnr-chip-ed" }, (bt.expired_date ? formatED(bt.expired_date) : "tanpa ED") + " \xb7 stok " + formatAngka(bt.stok_sistem != null ? bt.stok_sistem : 0))
         ]);
         if (i === 0) { b.batchId = bt.id; }
         chip.addEventListener("click", function () {
