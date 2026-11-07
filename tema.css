@@ -42,7 +42,7 @@
 /* Mode gelap: mengikuti pengaturan tampilan di HP atau komputer */
 @media (prefers-color-scheme: dark) {
   :root {
-    --kertas: #0F1A16;
+    --kertas: #111A16;
     --kartu: #17251F;
     --tinta: #E6F0EA;
     --tinta-pudar: #9DB5A9;
