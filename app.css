@@ -415,3 +415,27 @@
 .so-selisih-val  { font-family: var(--font-form); font-size: 22px; font-weight: 800; white-space: nowrap; }
 .so-selisih-val.lebih  { color: var(--aman-teks); }
 .so-selisih-val.kurang { color: var(--bahaya); }
+
+/* SO tab Penghitungan: tombol edit batch kecil */
+.btn-edit-batch {
+  background: none; border: none; cursor: pointer; padding: 0 4px;
+  font-size: 13px; color: var(--tinta-pudar); opacity: 0.6;
+  vertical-align: middle; line-height: 1;
+}
+.btn-edit-batch:hover { opacity: 1; }
+.so-inp-batch {
+  height: 28px; padding: 0 6px; width: 90px;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 14px; font-family: var(--font-form);
+  vertical-align: middle;
+}
+.so-inp-batch[type="month"] { width: 120px; }
+.so-btn-simpan-batch { font-size: 13px; min-height: 28px; padding: 0 10px; }
+
+/* SO tab Penyesuaian: dropdown pilih batch */
+.so-pilih-batch {
+  height: 32px; padding: 0 8px; max-width: 100%;
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta); font-size: 14px; font-family: var(--font-form);
+  vertical-align: middle; margin-bottom: 6px;
+}
