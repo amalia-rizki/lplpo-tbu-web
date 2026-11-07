@@ -1376,10 +1376,75 @@
           var skrg = new Date();
           edBulanIni = d2.getFullYear() === skrg.getFullYear() && d2.getMonth() === skrg.getMonth();
         }
+        // Sel batch: teks normal + tombol edit kecil; saat edit → inline input + input ED
+        var tdBatchTeks = el("span", {}, b.nomor_batch || "-");
+        var tdEDTeks    = el("span", {}, formatED(b.expired_date));
+        var tombolEditBatch = el("button", {
+          type: "button", class: "btn-edit-batch", title: "Edit batch/ED",
+          "aria-label": "Edit nomor batch dan ED"
+        }, "✏");
+
+        var inpBatchEdit = el("input", {
+          type: "text", class: "so-inp-batch", value: b.nomor_batch || "",
+          placeholder: "No. batch", "aria-label": "Nomor batch"
+        });
+        // type=month untuk ED
+        var edVal = b.expired_date ? b.expired_date.slice(0, 7) : "";
+        var inpEDEdit = el("input", {
+          type: "month", class: "so-inp-batch", value: edVal,
+          "aria-label": "Expired date"
+        });
+        var tombolSimpanBatch = el("button", { type: "button", class: "btn btn-garis so-btn-simpan-batch" }, "Simpan");
+        var tombolBatalBatch  = el("button", { type: "button", class: "btn btn-garis so-btn-simpan-batch" }, "Batal");
+        var indBatch = el("span", { class: "so-ind", "aria-hidden": "true" }, "");
+
+        var editBatchAktif = false;
+        function bukaEditBatch() {
+          editBatchAktif = true;
+          tdBatchTeks.hidden = true; tdEDTeks.hidden = true; tombolEditBatch.hidden = true;
+          inpBatchEdit.hidden = false; inpEDEdit.hidden = false;
+          tombolSimpanBatch.hidden = false; tombolBatalBatch.hidden = false;
+          inpBatchEdit.focus();
+        }
+        function tutupEditBatch() {
+          editBatchAktif = false;
+          tdBatchTeks.hidden = false; tdEDTeks.hidden = false; tombolEditBatch.hidden = false;
+          inpBatchEdit.hidden = true; inpEDEdit.hidden = true;
+          tombolSimpanBatch.hidden = true; tombolBatalBatch.hidden = true;
+        }
+        // Sembunyikan form edit awalnya
+        inpBatchEdit.hidden = true; inpEDEdit.hidden = true;
+        tombolSimpanBatch.hidden = true; tombolBatalBatch.hidden = true;
+
+        tombolEditBatch.addEventListener("click", bukaEditBatch);
+        tombolBatalBatch.addEventListener("click", tutupEditBatch);
+        tombolSimpanBatch.addEventListener("click", function () {
+          var noBatch = inpBatchEdit.value.trim();
+          var edBaru = inpEDEdit.value ? inpEDEdit.value + "-01" : "";
+          indBatch.className = "so-ind so-ind-loading";
+          LPLPO.ubah("batch", b.id, { nomor_batch: noBatch, expired_date: edBaru }).then(function () {
+            b.nomor_batch = noBatch;
+            b.expired_date = edBaru;
+            tdBatchTeks.textContent = noBatch || "-";
+            tdEDTeks.textContent = formatED(edBaru);
+            indBatch.className = "so-ind so-ind-ok";
+            tutupEditBatch();
+          }, function () {
+            indBatch.className = "so-ind so-ind-err";
+          });
+        });
+
+        var tdBatch = el("td", { "data-label": "No. batch" }, [
+          tdBatchTeks, tombolEditBatch, inpBatchEdit, indBatch
+        ]);
+        var tdED = el("td", { "data-label": "ED" }, [
+          tdEDTeks, inpEDEdit, tombolSimpanBatch, tombolBatalBatch
+        ]);
+
         var tr = el("tr", { class: edBulanIni ? "terpilih" : "" }, [
           el("td", { class: "utama", "data-label": "" }, obat.nama_utama || "-"),
-          el("td", { "data-label": "No. batch" }, b.nomor_batch || "-"),
-          el("td", { "data-label": "ED" }, formatED(b.expired_date)),
+          tdBatch,
+          tdED,
           el("td", { class: "n", "data-label": "Stok sistem" },
             b._stok_sistem !== undefined ? String(b._stok_sistem) : "-"),
           el("td", { class: "n so-td-fisik", "data-label": "Jumlah fisik" }, [inp, indikator])
@@ -1640,7 +1705,45 @@
         ]);
         kartu.appendChild(kepalaKartu);
 
+        // Dropdown pilih batch (lazy load saat kartu pertama kali dirender)
+        var pilBatch = el("select", { class: "so-pilih-batch", "aria-label": "Pilih batch" }, [
+          el("option", { value: b.id }, (b.nomor_batch || "tanpa batch") + " · ED " + formatED(b.expired_date) + " (ini)")
+        ]);
+        var indBatchSesuaikan = el("span", { class: "so-ind", "aria-hidden": "true" }, "");
+        var batchDimuat = false;
+
+        // Muat opsi batch obat ini saat dropdown difokus (lazy)
+        pilBatch.addEventListener("focus", function () {
+          if (batchDimuat) return;
+          batchDimuat = true;
+          daftarSemua("batch", { filter: 'obat = "' + obat.id + '"', perPage: 100, sort: "nomor_batch" }).then(function (db) {
+            pilBatch.textContent = "";
+            db.items.forEach(function (bt) {
+              var opt = el("option", { value: bt.id },
+                (bt.nomor_batch || "tanpa batch") + " · ED " + formatED(bt.expired_date) +
+                " · stok " + (bt.stok_sistem !== undefined && bt.stok_sistem !== null ? bt.stok_sistem : 0) +
+                (bt.id === b.id ? " (ini)" : ""));
+              if (bt.id === b.id) opt.setAttribute("selected", "selected");
+              pilBatch.appendChild(opt);
+            });
+          });
+        });
+
+        pilBatch.addEventListener("change", function () {
+          var batchBaruId = pilBatch.value;
+          if (!batchBaruId || !stateEdit.itemId) return;
+          indBatchSesuaikan.className = "so-ind so-ind-loading";
+          LPLPO.ubah("stockopname_item", stateEdit.itemId, { batch: batchBaruId }).then(function () {
+            indBatchSesuaikan.className = "so-ind so-ind-ok";
+          }, function () {
+            indBatchSesuaikan.className = "so-ind so-ind-err";
+          });
+        });
+
         var ringkasan = el("div", { class: "so-ringkasan" }, [
+          el("span", { class: "pudar" }, "Batch: "),
+          pilBatch, indBatchSesuaikan,
+          el("br", {}),
           el("span", { class: "pudar" }, "Sistem: " + sistem + " → Fisik: "),
           inpFisikEdit,
           indEdit,
