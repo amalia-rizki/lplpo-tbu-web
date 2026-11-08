@@ -1692,10 +1692,15 @@
         kartu.appendChild(kepalaKartu);
 
         var ringkasan = el("div", { class: "so-ringkasan" }, [
-          el("span", { class: "pudar" }, "Sistem: " + sistem + " → Fisik: "),
-          inpFisikEdit,
-          indEdit,
-          (fisikOtomatis(b) ? el("span", { class: "pudar" }, " (ED lewat, dianggap 0)") : document.createTextNode(""))
+          el("div", { class: "so-ringkasan-baris" }, [
+            el("span", { class: "pudar" }, "Stok sistem (batch ini): "),
+            el("strong", {}, formatAngka(sistem))
+          ]),
+          el("div", { class: "so-ringkasan-baris" }, [
+            el("span", { class: "pudar" }, "Fisik: "),
+            inpFisikEdit, indEdit,
+            (fisikOtomatis(b) ? el("span", { class: "pudar" }, " (ED lewat, dianggap 0)") : document.createTextNode(""))
+          ])
         ]);
         kartu.appendChild(ringkasan);
 
@@ -2082,22 +2087,32 @@
     areaHasil.textContent = "";
     areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Memuat transaksi..."));
 
-    daftarSemua("mutasi", {
-      perPage: 200,
-      sort: "tanggal,id",
-      filter: 'obat = "' + obat.id + '" && status = "confirmed"',
-      expand: "unit,batch"
-    }).then(function (d) {
+    // Muat mutasi DAN batch paralel — sisa harus mulai dari total stok_awal
+    Promise.all([
+      daftarSemua("mutasi", {
+        perPage: 200,
+        sort: "tanggal,id",
+        filter: 'obat = "' + obat.id + '" && status = "confirmed"',
+        expand: "unit,batch"
+      }),
+      daftarSemua("batch", {
+        perPage: 200,
+        filter: 'obat = "' + obat.id + '"',
+        fields: "id,nomor_batch,expired_date,stok_awal,stok_sistem,aktif"
+      })
+    ]).then(function (hasil) {
       areaHasil.textContent = "";
-      var items = d.items;
+      var items = hasil[0].items;
+      var batchList = hasil[1].items;
 
       if (!items.length) {
         areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Belum ada transaksi untuk obat ini."));
         return;
       }
 
-      // Hitung sisa stok berjalan
-      var sisa = 0;
+      // Sisa berjalan mulai dari jumlah stok_awal semua batch
+      var totalStokAwal = batchList.reduce(function (acc, bt) { return acc + (Number(bt.stok_awal) || 0); }, 0);
+      var sisa = totalStokAwal;
       var baris = items.map(function (m) {
         var jenis = m.jenis;
         var jumlah = Number(m.jumlah) || 0;
@@ -2116,8 +2131,37 @@
         };
       });
 
-      // Info ringkas
+      // Rincian batch aktif (stok_sistem > 0 atau semua batch)
+      var batchAktif = batchList.filter(function (bt) {
+        return (bt.stok_sistem !== null && bt.stok_sistem !== undefined ? bt.stok_sistem : (bt.stok_awal || 0)) > 0;
+      }).sort(function (a, c) {
+        return (a.expired_date || "9999").localeCompare(c.expired_date || "9999");
+      });
+
+      // Info ringkas + rincian batch
       var sisaTerakhir = baris[baris.length - 1].sisa;
+
+      var batchRincian;
+      if (batchAktif.length) {
+        var batchRows = batchAktif.map(function (bt) {
+          var stok = bt.stok_sistem !== null && bt.stok_sistem !== undefined ? bt.stok_sistem : (bt.stok_awal || 0);
+          return el("div", { class: "ks-batch-baris" }, [
+            el("span", { class: "ks-batch-no" }, bt.nomor_batch || "—"),
+            el("span", { class: "pudar ks-batch-ed" }, bt.expired_date ? formatED(bt.expired_date) : "tanpa ED"),
+            el("span", { class: "ks-batch-stok" + (stok < 0 ? " ks-negatif" : "") }, formatAngka(stok))
+          ]);
+        });
+        batchRincian = el("div", { class: "ks-ringkas-item ks-batch-wrap" }, [
+          el("span", { class: "ks-ringkas-label" }, "Stok per batch"),
+          el("div", { class: "ks-batch-daftar" }, batchRows)
+        ]);
+      } else {
+        batchRincian = el("div", { class: "ks-ringkas-item" }, [
+          el("span", { class: "ks-ringkas-label" }, "Stok per batch"),
+          el("span", { class: "pudar" }, "Tidak ada batch dengan stok > 0")
+        ]);
+      }
+
       var infoRingkas = el("div", { class: "ks-ringkas panel" }, [
         el("div", { class: "ks-ringkas-item" }, [
           el("span", { class: "ks-ringkas-label" }, "Obat"),
@@ -2132,6 +2176,7 @@
             class: "ks-ringkas-nilai ks-sisa-besar" + (sisaTerakhir < 0 ? " ks-negatif" : "")
           }, formatAngka(sisaTerakhir) + " " + (obat.satuan || ""))
         ]),
+        batchRincian,
         el("div", { class: "ks-ringkas-item" }, [
           el("span", { class: "ks-ringkas-label" }, "Total transaksi"),
           el("span", { class: "ks-ringkas-nilai" }, String(items.length))
