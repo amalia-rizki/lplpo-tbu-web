@@ -382,6 +382,20 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Rincian batch di header kartu stok */
+.ks-batch-wrap { flex-basis: 100%; }
+.ks-batch-daftar { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.ks-batch-baris {
+  display: flex; gap: 10px; align-items: baseline;
+  font-size: 14px; font-family: var(--font-form);
+}
+.ks-batch-no { font-weight: 600; min-width: 90px; }
+.ks-batch-ed { font-size: 13px; flex: 1; }
+.ks-batch-stok { font-variant-numeric: tabular-nums; font-weight: 600; margin-left: auto; }
+
+/* Ringkasan kartu selisih SO */
+.so-ringkasan-baris { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+
 .ks-filter-bar {
   display: flex;
   gap: 8px;
