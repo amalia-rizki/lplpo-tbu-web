@@ -1644,29 +1644,33 @@
         var diff = item.totalFisik - item.totalSistem;
         var diffStr = (diff > 0 ? "+" : "") + diff;
         var diffKelas = diff > 0 ? "lebih" : "kurang";
+        var satuan = item.obat.satuan || "";
+
+        // Baris batch yang bermasalah
+        var batchBermasalah = item.batch.filter(function (b) {
+          var fisik = fisikDari(b);
+          return fisik !== null && fisik !== b._stok_sistem;
+        });
+        var batchRows = batchBermasalah.map(function (b) {
+          var fisik = fisikDari(b);
+          var d = fisik - b._stok_sistem;
+          var dStr = (d > 0 ? "+" : "") + d;
+          var label = (b.nomor_batch || "tanpa batch") + (b.expired_date ? " (" + formatED(b.expired_date) + ")" : "");
+          return el("span", { class: "so-batch-chip " + (d > 0 ? "lebih" : "kurang") }, label + " " + dStr);
+        });
 
         var kartu = el("a", {
           href: "#/stockopname/item/" + item.obatId,
           class: "panel so-kartu so-kartu-item"
         }, [
           el("div", { class: "so-kepala" }, [
-            el("div", { class: "so-nama" }, [
-              el("strong", {}, item.obat.nama_utama || item.obatId),
-              el("span", { class: "pudar" }, " · " + item.batch.length + " batch · " + (item.obat.satuan || ""))
-            ]),
+            el("strong", { class: "so-nama-obat" }, item.obat.nama_utama || item.obatId),
             el("div", { class: "so-selisih-wrap" }, [
               el("span", { class: "so-selisih-val " + diffKelas }, diffStr),
-              el("span", { class: "pudar so-satuan" }, " " + (item.obat.satuan || ""))
+              el("span", { class: "pudar so-satuan" }, " " + satuan)
             ])
           ]),
-          el("div", { class: "so-ringkasan" }, [
-            el("div", { class: "so-ringkasan-baris" }, [
-              el("span", { class: "pudar" }, "Sistem: "),
-              el("strong", {}, formatAngka(item.totalSistem)),
-              el("span", { class: "pudar" }, "   Fisik: "),
-              el("strong", {}, formatAngka(item.totalFisik))
-            ])
-          ]),
+          batchRows.length ? el("div", { class: "so-batch-chips" }, batchRows) : el("span", {}),
           el("div", { class: "so-kartu-lihat pudar" }, "Lihat detail →")
         ]);
         area.appendChild(kartu);
@@ -1872,12 +1876,22 @@
         );
       }
 
+      // Hitung sisa total + sisa per-batch berjalan
       function hitungSisa(daftar) {
-        var sisa = totalStokAwal;
+        var sisaTotal = totalStokAwal;
+        var runBatch = {};
+        batchObat.forEach(function (bt) { runBatch[bt.id] = Number(bt.stok_awal) || 0; });
         return daftar.map(function (tx) {
           var j = Number(tx.jumlah) || 0;
-          if (tx.jenis === "masuk") sisa += j; else sisa -= j;
-          return sisa;
+          var bid = tx.batch || null;
+          if (tx.jenis === "masuk") {
+            sisaTotal += j;
+            if (bid) runBatch[bid] = (runBatch[bid] || 0) + j;
+          } else {
+            sisaTotal -= j;
+            if (bid) runBatch[bid] = (runBatch[bid] || 0) - j;
+          }
+          return { total: sisaTotal, batch: bid !== null ? runBatch[bid] : null };
         });
       }
 
@@ -1894,7 +1908,8 @@
           el("th", {}, "Batch"),
           el("th", { class: "n" }, "Masuk"),
           el("th", { class: "n" }, "Keluar"),
-          el("th", { class: "n" }, "Sisa"),
+          el("th", { class: "n" }, "Sisa batch"),
+          el("th", { class: "n" }, "Sisa total"),
           el("th", {}, "")
         ])]);
         var tbody = el("tbody", {});
@@ -1906,13 +1921,16 @@
           el("td", { "data-label": "Batch" }, ""),
           el("td", { "data-label": "Masuk", class: "n" }, formatAngka(totalStokAwal)),
           el("td", { "data-label": "Keluar", class: "n" }, ""),
-          el("td", { "data-label": "Sisa", class: "n" }, formatAngka(totalStokAwal)),
+          el("td", { "data-label": "Sisa batch", class: "n" }, ""),
+          el("td", { "data-label": "Sisa total", class: "n" }, formatAngka(totalStokAwal)),
           el("td", {}, "")
         ]));
 
         terurut.forEach(function (tx, idx) {
           var unitNama = (tx.expand && tx.expand.unit && tx.expand.unit.nama) || "-";
-          var sisaVal = sisaArr[idx];
+          var sisaObj = sisaArr[idx];
+          var sisaTotal = sisaObj.total;
+          var sisaBatch = sisaObj.batch;
           var jumlah = Number(tx.jumlah) || 0;
 
           // Tanggal editable
@@ -1957,7 +1975,9 @@
           // Jumlah editable
           var tdMasuk = el("td", { "data-label": "Masuk", class: "n so-td-edit" });
           var tdKeluar = el("td", { "data-label": "Keluar", class: "n so-td-edit" });
-          var tdSisa = el("td", { "data-label": "Sisa", class: "n" + (sisaVal < 0 ? " ks-negatif" : "") }, formatAngka(sisaVal));
+          var tdSisaBatch = el("td", { "data-label": "Sisa batch", class: "n" + (sisaBatch !== null && sisaBatch < 0 ? " ks-negatif" : "") },
+            sisaBatch !== null ? formatAngka(sisaBatch) : "—");
+          var tdSisa = el("td", { "data-label": "Sisa total", class: "n" + (sisaTotal < 0 ? " ks-negatif" : "") }, formatAngka(sisaTotal));
 
           function buatSelJ(td) {
             var spanJ = el("span", {}, formatAngka(jumlah));
@@ -2003,7 +2023,7 @@
           });
           tdHapus.appendChild(tombolH);
 
-          tbody.appendChild(el("tr", {}, [tdTgl, el("td", { "data-label": "Dari / Ke" }, unitNama), tdBatch, tdMasuk, tdKeluar, tdSisa, tdHapus]));
+          tbody.appendChild(el("tr", {}, [tdTgl, el("td", { "data-label": "Dari / Ke" }, unitNama), tdBatch, tdMasuk, tdKeluar, tdSisaBatch, tdSisa, tdHapus]));
         });
 
         var tabel = el("table", { class: "kartu so-tx-tabel" }, [thead, tbody]);

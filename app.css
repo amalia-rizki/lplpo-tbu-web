@@ -527,3 +527,15 @@
 /* SO tabel transaksi: baris saldo awal */
 .so-tx-tr-awal td { font-style: italic; color: var(--tinta-pudar); }
 .so-tx-tr-awal .n { font-style: normal; font-weight: 600; color: var(--tinta); }
+
+/* SO daftar Penyesuaian: nama obat di kartu */
+.so-nama-obat { font-size: 15px; }
+
+/* SO daftar Penyesuaian: chips batch bermasalah */
+.so-batch-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.so-batch-chip {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 12px; font-family: var(--font-form); white-space: nowrap;
+}
+.so-batch-chip.lebih  { background: color-mix(in srgb, var(--aman-teks, #22c55e) 15%, transparent); color: var(--aman-teks, #22c55e); }
+.so-batch-chip.kurang { background: color-mix(in srgb, var(--bahaya, #ef4444) 15%, transparent); color: var(--bahaya, #ef4444); }
