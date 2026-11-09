@@ -1683,12 +1683,12 @@
     area.appendChild(el("p", { class: "status-koneksi" }, "Memuat detail..."));
 
     Promise.all([
-      LPLPO.ambil("daftar_obat", obatId),
+      LPLPO.daftar("daftar_obat", { filter: 'id = "' + obatId + '"', perPage: 1 }),
       daftarSemua("batch", { perPage: 200, filter: 'obat = "' + obatId + '"', sort: "nomor_batch" }),
       daftarSemua("mutasi", { perPage: 500, filter: 'obat = "' + obatId + '" && status = "confirmed"', sort: "tanggal,id", expand: "unit,batch" }),
       ambilItemSO(soId)
     ]).then(function (hasil) {
-      var obat = hasil[0];
+      var obat = (hasil[0].items && hasil[0].items[0]) || {};
       var batchObat = hasil[1].items;
       var semuaTx = hasil[2].items;
       var soItems = hasil[3].items;
