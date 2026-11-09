@@ -1140,12 +1140,117 @@
     return LPLPO.buat("stockopname_item", data);
   }
 
+  // soAktifId: ID stockopname yang sedang dipakai (dipilih user), atau null
+  var soAktifId = null;
+
   function renderStockopname() {
     isi.textContent = "";
     isi.appendChild(judul("Stockopname", "Cocokkan stok fisik dengan stok sistem. Isi jumlah fisik per batch, lalu simpan."));
 
     var area = el("div", { class: "batas-dalam" });
     isi.appendChild(area);
+
+    var hashSub = (location.hash || "").replace(/^#\/stockopname\/?/, "");
+    var subBagian = hashSub.split("/");
+    var sub = subBagian[0] || "hitung";
+    var subObatId = subBagian[1] || "";
+    if (sub !== "sesuaikan" && sub !== "item") sub = "hitung";
+
+    // Jika ada soAktifId (user sudah pilih periode), langsung ke tab
+    if (soAktifId) {
+      renderSOTabs(area, soAktifId, sub, subObatId);
+      return;
+    }
+
+    // Tampilkan pilih periode SO
+    tampilPilihPeriodeSO(area, function (soId) {
+      soAktifId = soId;
+      renderSOTabs(area, soId, sub, subObatId);
+    });
+  }
+
+  function formatBulanSO(tgl) {
+    if (!tgl) return "?";
+    var d = new Date(tgl);
+    if (isNaN(d)) return tgl.slice(0, 7);
+    return d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  }
+
+  function tampilPilihPeriodeSO(area, onPilih) {
+    area.textContent = "";
+    area.appendChild(el("p", { class: "status-koneksi" }, "Memuat daftar stockopname..."));
+
+    LPLPO.daftar("stockopname", { perPage: 50, sort: "-tanggal" }).then(function (d) {
+      area.textContent = "";
+
+      var daftarSO = d.items || [];
+
+      var kartuPilih = el("div", { class: "panel" });
+      kartuPilih.appendChild(el("h3", { style: "margin:0 0 12px; font-size:15px" }, "Pilih periode stockopname"));
+
+      if (daftarSO.length) {
+        var ul = el("ul", { class: "so-periode-list" });
+        daftarSO.forEach(function (so) {
+          var bulan = formatBulanSO(so.tanggal);
+          var statusBadge = el("span", { class: "so-status-badge so-status-" + (so.status || "draft") }, so.status || "draft");
+          var tombol = el("button", { type: "button", class: "so-periode-btn" }, "");
+          tombol.appendChild(el("span", { class: "so-periode-nama" }, bulan));
+          tombol.appendChild(statusBadge);
+          tombol.addEventListener("click", function () { onPilih(so.id); });
+          ul.appendChild(el("li", {}, [tombol]));
+        });
+        kartuPilih.appendChild(ul);
+      } else {
+        kartuPilih.appendChild(el("p", { class: "pudar", style: "margin:0 0 12px" }, "Belum ada stockopname. Buat yang pertama:"));
+      }
+
+      kartuPilih.appendChild(el("hr", { style: "margin:12px 0" }));
+      kartuPilih.appendChild(el("p", { class: "pudar", style: "margin:0 0 8px; font-size:13px" }, "Atau buat stockopname baru untuk periode tertentu:"));
+
+      var now = new Date();
+      var tglDefault = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-01";
+      var inpTgl = el("input", { type: "date", class: "so-inp-edit", value: tglDefault, "aria-label": "Tanggal stockopname" });
+      var inpCatatan = el("input", { type: "text", class: "so-inp-edit", placeholder: "Catatan (opsional)", "aria-label": "Catatan" });
+      var tombolBuat = el("button", { type: "button", class: "btn btn-utama" }, "+ Buat SO baru");
+      var pesanBuat = el("p", { class: "pesan", hidden: true });
+
+      tombolBuat.addEventListener("click", function () {
+        if (!inpTgl.value) {
+          pesanBuat.textContent = "Pilih tanggal SO.";
+          pesanBuat.className = "pesan galat"; pesanBuat.hidden = false; return;
+        }
+        tombolBuat.disabled = true; tombolBuat.textContent = "Membuat...";
+        LPLPO.buat("stockopname", {
+          tanggal: inpTgl.value,
+          status: "draft",
+          catatan: inpCatatan.value || ""
+        }).then(function (so) {
+          onPilih(so.id);
+        }, function (err) {
+          pesanBuat.textContent = (err && (err.pesan || err.message)) || "Gagal membuat SO.";
+          pesanBuat.className = "pesan galat"; pesanBuat.hidden = false;
+          tombolBuat.disabled = false; tombolBuat.textContent = "+ Buat SO baru";
+        });
+      });
+
+      kartuPilih.appendChild(el("div", { style: "display:flex; gap:8px; flex-wrap:wrap; align-items:center" }, [inpTgl, inpCatatan, tombolBuat]));
+      kartuPilih.appendChild(pesanBuat);
+      area.appendChild(kartuPilih);
+    }, function (err) {
+      tanganiGalat(err, renderStockopname, area);
+    });
+  }
+
+  function renderSOTabs(area, soId, sub, subObatId) {
+    area.textContent = "";
+
+    // Tombol ganti periode
+    var tombolGanti = el("button", { type: "button", class: "btn btn-garis", style: "font-size:12px; margin-bottom:8px" }, "← Ganti periode");
+    tombolGanti.addEventListener("click", function () {
+      soAktifId = null;
+      renderStockopname();
+    });
+    area.appendChild(tombolGanti);
 
     var tabNav = el("nav", { class: "tab", "aria-label": "Tahap stockopname" });
     var tabHitung    = el("a", { href: "#/stockopname/hitung" }, "1 · Penghitungan");
@@ -1157,21 +1262,14 @@
     var kontenTab = el("div", { class: "batas-dalam" });
     area.appendChild(kontenTab);
 
-    var hashSub = (location.hash || "").replace(/^#\/stockopname\/?/, "");
-    // hashSub bisa: "hitung", "sesuaikan", "item/OBATID"
-    var subBagian = hashSub.split("/");
-    var sub = subBagian[0] || "hitung";
-    var subObatId = subBagian[1] || "";
-    if (sub !== "sesuaikan" && sub !== "item") sub = "hitung";
-
-    // Muat SO bulan ini dulu, lalu render tab
-    kontenTab.appendChild(el("p", { class: "status-koneksi" }, "Memuat data SO..."));
-    ambilAtauBuatSO().then(function (so) {
+    // Muat info SO untuk label status
+    kontenTab.appendChild(el("p", { class: "status-koneksi" }, "Memuat..."));
+    LPLPO.daftar("stockopname", { filter: 'id = "' + soId + '"', perPage: 1 }).then(function (d) {
+      var so = (d.items && d.items[0]) || { id: soId, status: "draft", tanggal: "" };
       kontenTab.textContent = "";
-      var soId = so.id;
 
-      // Label status
-      var lblStatus = el("span", { class: "so-status-label pudar" }, "Status: " + so.status);
+      var lblStatus = el("span", { class: "so-status-label pudar" },
+        "Periode: " + formatBulanSO(so.tanggal) + " · Status: " + (so.status || "draft"));
       kontenTab.appendChild(lblStatus);
 
       if (sub === "item" && subObatId) {
@@ -1787,68 +1885,7 @@
       }
       area.appendChild(seksiBatch);
 
-      // --- Bagian 2: Merge batch ---
-      var seksiMerge = el("div", { class: "panel" });
-      seksiMerge.appendChild(el("h3", { style: "margin:0 0 8px; font-size:15px" }, "Gabungkan batch"));
-      seksiMerge.appendChild(el("p", { class: "pudar", style: "margin:0 0 8px; font-size:13px" },
-        "Pilih dua batch yang sebenarnya sama (misal beda kapitalisasi) untuk digabungkan. Semua transaksi akan dipindah ke batch tujuan."));
-
-      var pesanMerge = el("p", { class: "pesan", hidden: true });
-
-      function labelBatch(bt) {
-        return (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "") + " · stok " + bt._stok_sistem;
-      }
-
-      var pilAsal = el("select", { class: "so-pilih-mutasi" },
-        [el("option", { value: "" }, "— Batch asal (akan dihapus) —")].concat(
-          batchObat.map(function (bt) { return el("option", { value: bt.id }, labelBatch(bt)); })
-        ));
-      var pilTujuan = el("select", { class: "so-pilih-mutasi" },
-        [el("option", { value: "" }, "— Batch tujuan (dipertahankan) —")].concat(
-          batchObat.map(function (bt) { return el("option", { value: bt.id }, labelBatch(bt)); })
-        ));
-      var tombolMerge = el("button", { type: "button", class: "btn btn-bahaya", disabled: true }, "Gabungkan");
-
-      function cekMerge() {
-        tombolMerge.disabled = !pilAsal.value || !pilTujuan.value || pilAsal.value === pilTujuan.value;
-      }
-      pilAsal.addEventListener("change", cekMerge);
-      pilTujuan.addEventListener("change", cekMerge);
-
-      tombolMerge.addEventListener("click", function () {
-        var asalId = pilAsal.value;
-        var tujuanId = pilTujuan.value;
-        var asalLabel = pilAsal.options[pilAsal.selectedIndex].textContent;
-        var tujuanLabel = pilTujuan.options[pilTujuan.selectedIndex].textContent;
-        if (!window.confirm("Gabungkan batch?\n\nAsal: " + asalLabel + "\nTujuan: " + tujuanLabel + "\n\nSemua transaksi dari batch asal akan dipindah ke batch tujuan, lalu batch asal dihapus.\nTidak bisa dibatalkan.")) return;
-
-        tombolMerge.disabled = true;
-        tombolMerge.textContent = "Menggabungkan...";
-        pesanMerge.hidden = true;
-
-        // Ambil semua mutasi batch asal, patch ke tujuan, lalu hapus batch asal
-        daftarSemua("mutasi", { filter: 'batch = "' + asalId + '"', perPage: 500 }).then(function (txAsal) {
-          var patchAll = txAsal.items.map(function (tx) {
-            return LPLPO.ubah("mutasi", tx.id, { batch: tujuanId });
-          });
-          return Promise.all(patchAll);
-        }).then(function () {
-          return hapusRecord("batch", asalId);
-        }).then(function () {
-          pesanMerge.textContent = "Batch berhasil digabungkan.";
-          pesanMerge.className = "pesan info"; pesanMerge.hidden = false;
-          // Reload halaman ini
-          renderDetailItem(area, soId, obatId);
-        }, function (err) {
-          pesanMerge.textContent = (err && (err.pesan || err.message)) || "Gagal menggabungkan batch.";
-          pesanMerge.className = "pesan galat"; pesanMerge.hidden = false;
-          tombolMerge.disabled = false; tombolMerge.textContent = "Gabungkan";
-        });
-      });
-
-      seksiMerge.appendChild(el("div", { class: "so-merge-baris" }, [pilAsal, pilTujuan, tombolMerge]));
-      seksiMerge.appendChild(pesanMerge);
-      area.appendChild(seksiMerge);
+      // Merge batch dan tambah mutasi kini ada di popup (tombol di headerTx)
 
       // --- Bagian 3: Kartu stok editable ---
       var seksiTx = el("div", { class: "panel" });
@@ -1866,7 +1903,6 @@
         tombolRecalc.disabled = true;
         indRecalc.className = "so-ind so-ind-loading";
 
-        // Hitung stok_sistem per batch dari semuaTx + stok_awal
         var sisaBatch = {};
         batchObat.forEach(function (bt) { sisaBatch[bt.id] = Number(bt.stok_awal) || 0; });
         semuaTx.forEach(function (tx) {
@@ -1877,7 +1913,6 @@
           else sisaBatch[tx.batch] -= j;
         });
 
-        // PATCH semua batch sekaligus
         var patches = batchObat.map(function (bt) {
           return LPLPO.ubah("batch", bt.id, { stok_sistem: sisaBatch[bt.id] || 0 }).then(function () {
             bt._stok_sistem = sisaBatch[bt.id] || 0;
@@ -1887,14 +1922,29 @@
         Promise.all(patches).then(function () {
           indRecalc.className = "so-ind so-ind-ok";
           tombolRecalc.disabled = false;
-          // Reload halaman agar selisih per batch terupdate
           renderDetailItem(area, soId, obatId);
         }, function () {
           indRecalc.className = "so-ind so-ind-err";
           tombolRecalc.disabled = false;
         });
       });
-      headerTx.appendChild(el("div", { style: "display:flex;gap:8px;align-items:center;margin-top:6px" }, [tombolRecalc, indRecalc]));
+
+      // Tombol Gabung batch (popup)
+      var tombolGabung = el("button", { type: "button", class: "btn btn-sekunder", style: "font-size:13px" }, "⇄ Gabung batch");
+      tombolGabung.addEventListener("click", function () {
+        bukaPopupGabungBatch(batchObat, obatId, function () { renderDetailItem(area, soId, obatId); });
+      });
+
+      // Tombol Tambah mutasi (popup)
+      var tombolTambahMutasi = el("button", { type: "button", class: "btn btn-utama", style: "font-size:13px" }, "+ Tambah mutasi");
+      tombolTambahMutasi.addEventListener("click", function () {
+        bukaPopupTambahMutasi(batchObat, obat, function (pesan) {
+          soPesanTerakhir = pesan;
+          renderDetailItem(area, soId, obatId);
+        });
+      });
+
+      headerTx.appendChild(el("div", { class: "so-header-aksi" }, [tombolRecalc, indRecalc, tombolGabung, tombolTambahMutasi]));
 
       var pesanTxGlobal = el("p", { class: "pesan", hidden: true });
       seksiTx.appendChild(pesanTxGlobal);
@@ -2045,8 +2095,21 @@
           if (tx.jenis === "masuk") { buatSelJ(tdMasuk); tdKeluar.textContent = ""; }
           else { tdMasuk.textContent = ""; buatSelJ(tdKeluar); }
 
-          // Hapus
-          var tdHapus = el("td", {});
+          // Aksi: Pisah + Hapus
+          var tdHapus = el("td", { class: "so-td-aksi" });
+
+          // Tombol Pisah (hanya untuk baris yang punya batch)
+          if (tx.batch) {
+            var tombolPisah = el("button", { type: "button", class: "btn btn-garis so-btn-pisah-tx", title: "Pisahkan ke dua batch", "aria-label": "Pisah" }, "⇥");
+            tombolPisah.addEventListener("click", function () {
+              bukaPopupPisahBatch(tx, jumlah, batchObat, function () {
+                // reload
+                renderDetailItem(area, soId, obatId);
+              });
+            });
+            tdHapus.appendChild(tombolPisah);
+          }
+
           var tombolH = el("button", { type: "button", class: "btn btn-bahaya so-btn-hapus-tx", title: "Hapus", "aria-label": "Hapus" }, "✕");
           tombolH.addEventListener("click", function () {
             var label = (tx.tanggal ? tx.tanggal.slice(0, 10) : "") + " · " + (tx.jenis === "masuk" ? "Masuk" : "Keluar") + " " + jumlah + " · " + unitNama;
@@ -2072,18 +2135,284 @@
       }
 
       gambarTabel();
-
-      // Form tambah mutasi
-      muatUnitUntukSO(seksiTx, batchObat[0] || { id: "", nomor_batch: "" }, obat, batchObat, function (pesan) {
-        soPesanTerakhir = pesan;
-        renderDetailItem(area, soId, obatId);
-      });
-
       area.appendChild(seksiTx);
 
     }, function (err) {
       tanganiGalat(err, function () { renderDetailItem(area, soId, obatId); }, area);
     });
+  }
+
+  // --- Popup helper: buat dan tampilkan modal ---
+  function buatModal(judul, onTutup) {
+    var overlay = el("div", { class: "modal-overlay aktif", role: "dialog", "aria-modal": "true", "aria-label": judul });
+    var kotak = el("div", { class: "modal-kotak" });
+    var kepalaModal = el("div", { class: "modal-kepala" });
+    kepalaModal.appendChild(el("h2", { class: "modal-judul" }, judul));
+    var tombolX = el("button", { type: "button", class: "modal-tutup", "aria-label": "Tutup" }, "✕");
+    tombolX.addEventListener("click", function () {
+      overlay.remove();
+      if (onTutup) onTutup();
+    });
+    kepalaModal.appendChild(tombolX);
+    kotak.appendChild(kepalaModal);
+    overlay.appendChild(kotak);
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) { overlay.remove(); if (onTutup) onTutup(); }
+    });
+    return { overlay: overlay, kotak: kotak, tutup: function () { overlay.remove(); } };
+  }
+
+  // --- Popup: Gabungkan batch ---
+  function bukaPopupGabungBatch(batchObat, obatId, onSelesai) {
+    var modal = buatModal("Gabungkan batch");
+    var kotak = modal.kotak;
+
+    kotak.appendChild(el("p", { class: "pudar", style: "margin:0 0 12px; font-size:13px" },
+      "Pilih dua batch yang sebenarnya sama. Semua transaksi akan dipindah ke batch tujuan, lalu batch asal dihapus."));
+
+    function labelBatch(bt) {
+      return (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "") + " · stok " + bt._stok_sistem;
+    }
+
+    var pilAsal = el("select", { class: "so-pilih-mutasi" },
+      [el("option", { value: "" }, "— Batch asal (akan dihapus) —")].concat(
+        batchObat.map(function (bt) { return el("option", { value: bt.id }, labelBatch(bt)); })
+      ));
+    var pilTujuan = el("select", { class: "so-pilih-mutasi" },
+      [el("option", { value: "" }, "— Batch tujuan (dipertahankan) —")].concat(
+        batchObat.map(function (bt) { return el("option", { value: bt.id }, labelBatch(bt)); })
+      ));
+    var tombolMerge = el("button", { type: "button", class: "btn btn-bahaya", disabled: true }, "Gabungkan");
+    var pesanMerge = el("p", { class: "pesan", hidden: true });
+
+    function cekMerge() {
+      tombolMerge.disabled = !pilAsal.value || !pilTujuan.value || pilAsal.value === pilTujuan.value;
+    }
+    pilAsal.addEventListener("change", cekMerge);
+    pilTujuan.addEventListener("change", cekMerge);
+
+    tombolMerge.addEventListener("click", function () {
+      var asalId = pilAsal.value;
+      var tujuanId = pilTujuan.value;
+      var asalLabel = pilAsal.options[pilAsal.selectedIndex].textContent;
+      var tujuanLabel = pilTujuan.options[pilTujuan.selectedIndex].textContent;
+      if (!window.confirm("Gabungkan batch?\n\nAsal: " + asalLabel + "\nTujuan: " + tujuanLabel + "\n\nTidak bisa dibatalkan.")) return;
+
+      tombolMerge.disabled = true;
+      tombolMerge.textContent = "Menggabungkan...";
+      pesanMerge.hidden = true;
+
+      daftarSemua("mutasi", { filter: 'batch = "' + asalId + '"', perPage: 500 }).then(function (txAsal) {
+        var patchAll = txAsal.items.map(function (tx) {
+          return LPLPO.ubah("mutasi", tx.id, { batch: tujuanId });
+        });
+        return Promise.all(patchAll);
+      }).then(function () {
+        return hapusRecord("batch", asalId);
+      }).then(function () {
+        modal.tutup();
+        onSelesai();
+      }, function (err) {
+        pesanMerge.textContent = (err && (err.pesan || err.message)) || "Gagal menggabungkan.";
+        pesanMerge.className = "pesan galat"; pesanMerge.hidden = false;
+        tombolMerge.disabled = false; tombolMerge.textContent = "Gabungkan";
+      });
+    });
+
+    var tombolBatal = el("button", { type: "button", class: "btn btn-garis" }, "Batal");
+    tombolBatal.addEventListener("click", function () { modal.tutup(); });
+
+    var isiModal = el("div", { class: "modal-isi" }, [
+      el("div", { class: "field" }, [el("label", { class: "field-label" }, "Batch asal (akan dihapus)"), pilAsal]),
+      el("div", { class: "field" }, [el("label", { class: "field-label" }, "Batch tujuan (dipertahankan)"), pilTujuan]),
+      pesanMerge
+    ]);
+    var tombolModal = el("div", { class: "modal-tombol" }, [tombolBatal, tombolMerge]);
+    kotak.appendChild(isiModal);
+    kotak.appendChild(tombolModal);
+  }
+
+  // --- Popup: Tambah mutasi baru ---
+  function bukaPopupTambahMutasi(batchObat, obat, onSelesai) {
+    var modal = buatModal("Tambah mutasi baru");
+    var kotak = modal.kotak;
+
+    var pilUnit = el("select", { class: "so-pilih-mutasi" }, [el("option", { value: "" }, "Memuat unit...")]);
+    var petunjuk = el("p", { class: "pudar", style: "margin:0 0 8px; font-size:13px" }, "");
+    var inpTambahJumlah = el("input", { type: "number", min: "1", step: "1", class: "so-inp-edit", placeholder: "Jumlah", inputmode: "numeric", "aria-label": "Jumlah" });
+    var skrg = new Date();
+    var tglHari = skrg.getFullYear() + "-" + String(skrg.getMonth() + 1).padStart(2, "0") + "-" + String(skrg.getDate()).padStart(2, "0");
+    var inpTambahTanggal = el("input", { type: "date", class: "so-inp-edit", value: tglHari, "aria-label": "Tanggal mutasi" });
+    var pilBatchTambah = el("select", { class: "so-pilih-mutasi", "aria-label": "Batch" },
+      [el("option", { value: "" }, "— tanpa relasi batch —")].concat(batchObat.map(function (bt) {
+        return el("option", { value: bt.id }, (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : ""));
+      })));
+    if (batchObat.length) pilBatchTambah.value = batchObat[0].id;
+    var tombolTambah = el("button", { type: "button", class: "btn btn-utama", disabled: true }, "Tambah mutasi");
+    var pesanTambah = el("p", { class: "pesan", hidden: true });
+    var tombolBatal = el("button", { type: "button", class: "btn btn-garis" }, "Batal");
+    tombolBatal.addEventListener("click", function () { modal.tutup(); });
+
+    function jenisDipilih() {
+      var opt = pilUnit.options[pilUnit.selectedIndex];
+      if (!opt || !opt.value) return "";
+      return opt.getAttribute("data-tipe") === "sumber" ? "masuk" : "keluar";
+    }
+
+    LPLPO.daftar("unit", { perPage: 100, sort: "nama", filter: "aktif=true" }).then(function (du) {
+      pilUnit.textContent = "";
+      pilUnit.appendChild(el("option", { value: "" }, "— Pilih unit asal/tujuan —"));
+      du.items.forEach(function (u) {
+        pilUnit.appendChild(el("option", { value: u.id, "data-tipe": u.tipe || "" }, u.nama));
+      });
+      pilUnit.addEventListener("change", function () {
+        tombolTambah.disabled = !pilUnit.value;
+        var j = jenisDipilih();
+        var nama = pilUnit.options[pilUnit.selectedIndex].textContent;
+        petunjuk.textContent = j === "masuk" ? "Dicatat sebagai: masuk dari " + nama
+          : (j === "keluar" ? "Dicatat sebagai: keluar ke " + nama : "");
+      });
+    }, function () {
+      pilUnit.textContent = "";
+      pilUnit.appendChild(el("option", { value: "" }, "Gagal memuat unit"));
+    });
+
+    tombolTambah.addEventListener("click", function () {
+      var unitId = pilUnit.value;
+      var jumlah = Number(inpTambahJumlah.value);
+      var tanggal = inpTambahTanggal.value || tglHari;
+      var jenis = jenisDipilih();
+      if (!unitId || !jenis || !jumlah || jumlah < 1) {
+        pesanTambah.textContent = "Pilih unit dan isi jumlah.";
+        pesanTambah.className = "pesan galat"; pesanTambah.hidden = false; return;
+      }
+      tombolTambah.disabled = true; tombolTambah.textContent = "Menyimpan...";
+      LPLPO.buat("mutasi", {
+        obat: obat.id,
+        batch: pilBatchTambah.value || undefined,
+        unit: unitId,
+        jenis: jenis,
+        jumlah: jumlah,
+        tanggal: tanggal,
+        status: "confirmed",
+        catatan: "Koreksi stockopname"
+      }).then(function () {
+        modal.tutup();
+        onSelesai("Mutasi baru ditambahkan (" + (jenis === "masuk" ? "masuk" : "keluar") + " " + jumlah + ").");
+      }, function (err) {
+        pesanTambah.textContent = (err && (err.pesan || err.message)) || "Gagal menyimpan.";
+        pesanTambah.className = "pesan galat"; pesanTambah.hidden = false;
+        tombolTambah.disabled = false; tombolTambah.textContent = "Tambah mutasi";
+      });
+    });
+
+    var isiModal = el("div", { class: "modal-isi" }, [
+      el("div", { class: "field" }, [el("label", { class: "field-label" }, "Unit asal/tujuan"), pilUnit]),
+      petunjuk,
+      el("div", { class: "field" }, [el("label", { class: "field-label" }, "Jumlah"), inpTambahJumlah]),
+      el("div", { class: "field" }, [el("label", { class: "field-label" }, "Tanggal"), inpTambahTanggal]),
+      el("div", { class: "field" }, [el("label", { class: "field-label" }, "Batch"), pilBatchTambah]),
+      pesanTambah
+    ]);
+    var tombolModal = el("div", { class: "modal-tombol" }, [tombolBatal, tombolTambah]);
+    kotak.appendChild(isiModal);
+    kotak.appendChild(tombolModal);
+  }
+
+  // --- Popup: Pisahkan batch satu mutasi jadi dua ---
+  function bukaPopupPisahBatch(tx, jumlahAsal, batchObat, onSelesai) {
+    var modal = buatModal("Pisahkan batch");
+    var kotak = modal.kotak;
+
+    var labelBatchAsal = batchObat.reduce(function (acc, bt) {
+      return bt.id === tx.batch ? (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "") : acc;
+    }, "?");
+
+    kotak.appendChild(el("p", { style: "margin:0 0 12px; font-size:13px" },
+      "Mutasi " + (tx.jenis === "masuk" ? "masuk" : "keluar") + " " + jumlahAsal + " dari batch " + labelBatchAsal + " akan dipecah menjadi dua baris dengan batch berbeda."));
+
+    var inpJumlah1 = el("input", { type: "number", min: "1", step: "1", max: String(jumlahAsal - 1), class: "so-inp-edit", placeholder: "Jumlah batch 1", inputmode: "numeric", "aria-label": "Jumlah batch 1" });
+    var lblJumlah2 = el("span", { class: "pudar", style: "font-size:13px" }, "Batch 2: —");
+
+    inpJumlah1.addEventListener("input", function () {
+      var v = Number(inpJumlah1.value);
+      if (v > 0 && v < jumlahAsal) {
+        lblJumlah2.textContent = "Batch 2: " + (jumlahAsal - v);
+      } else {
+        lblJumlah2.textContent = "Batch 2: —";
+      }
+    });
+
+    var pilBatch1 = el("select", { class: "so-pilih-mutasi", "aria-label": "Batch untuk bagian 1" },
+      batchObat.map(function (bt) {
+        return el("option", { value: bt.id, selected: bt.id === tx.batch }, (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : ""));
+      }));
+    var pilBatch2 = el("select", { class: "so-pilih-mutasi", "aria-label": "Batch untuk bagian 2" },
+      [el("option", { value: "" }, "— Pilih batch —")].concat(batchObat.filter(function (bt) { return bt.id !== tx.batch; }).map(function (bt) {
+        return el("option", { value: bt.id }, (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : ""));
+      })));
+
+    var tombolPisah = el("button", { type: "button", class: "btn btn-utama" }, "Pisahkan");
+    var pesanPisah = el("p", { class: "pesan", hidden: true });
+    var tombolBatal = el("button", { type: "button", class: "btn btn-garis" }, "Batal");
+    tombolBatal.addEventListener("click", function () { modal.tutup(); });
+
+    tombolPisah.addEventListener("click", function () {
+      var j1 = Number(inpJumlah1.value);
+      var j2 = jumlahAsal - j1;
+      var b1 = pilBatch1.value;
+      var b2 = pilBatch2.value;
+      if (!j1 || j1 < 1 || j1 >= jumlahAsal) {
+        pesanPisah.textContent = "Jumlah batch 1 harus antara 1 dan " + (jumlahAsal - 1) + ".";
+        pesanPisah.className = "pesan galat"; pesanPisah.hidden = false; return;
+      }
+      if (!b2) {
+        pesanPisah.textContent = "Pilih batch untuk bagian 2.";
+        pesanPisah.className = "pesan galat"; pesanPisah.hidden = false; return;
+      }
+      if (b1 === b2) {
+        pesanPisah.textContent = "Batch 1 dan batch 2 harus berbeda.";
+        pesanPisah.className = "pesan galat"; pesanPisah.hidden = false; return;
+      }
+      tombolPisah.disabled = true; tombolPisah.textContent = "Memproses...";
+      pesanPisah.hidden = true;
+
+      // Patch mutasi asli: ganti jumlah ke j1 dan batch ke b1
+      LPLPO.ubah("mutasi", tx.id, { jumlah: j1, batch: b1 }).then(function () {
+        // Buat mutasi baru untuk j2 dengan batch b2
+        return LPLPO.buat("mutasi", {
+          obat: tx.obat,
+          batch: b2,
+          unit: tx.unit,
+          jenis: tx.jenis,
+          jumlah: j2,
+          tanggal: tx.tanggal,
+          status: "confirmed",
+          catatan: (tx.catatan ? tx.catatan + " " : "") + "[pisah batch]"
+        });
+      }).then(function () {
+        modal.tutup();
+        onSelesai();
+      }, function (err) {
+        pesanPisah.textContent = (err && (err.pesan || err.message)) || "Gagal memisahkan.";
+        pesanPisah.className = "pesan galat"; pesanPisah.hidden = false;
+        tombolPisah.disabled = false; tombolPisah.textContent = "Pisahkan";
+      });
+    });
+
+    var isiModal = el("div", { class: "modal-isi" }, [
+      el("div", { class: "field" }, [el("label", { class: "field-label" }, "Batch bagian 1"), pilBatch1]),
+      el("div", { class: "field" }, [
+        el("label", { class: "field-label" }, "Jumlah bagian 1"),
+        el("div", { style: "display:flex; gap:8px; align-items:center" }, [inpJumlah1, lblJumlah2])
+      ]),
+      el("div", { class: "field" }, [el("label", { class: "field-label" }, "Batch bagian 2"), pilBatch2]),
+      pesanPisah
+    ]);
+    var tombolModal = el("div", { class: "modal-tombol" }, [tombolBatal, tombolPisah]);
+    kotak.appendChild(isiModal);
+    kotak.appendChild(tombolModal);
   }
 
   // Tambah mutasi baru: jenis ditentukan dari tipe unit
