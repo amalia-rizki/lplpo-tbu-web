@@ -43,7 +43,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --kertas: #111A16;
-    --kartu: #17251F;
+    --kartu: #000000;
     --tinta: #E6F0EA;
     --tinta-pudar: #9DB5A9;
     --hijau-muda: #1B3A2F;
