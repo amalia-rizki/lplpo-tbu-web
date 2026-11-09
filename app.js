@@ -1157,8 +1157,12 @@
     var kontenTab = el("div", { class: "batas-dalam" });
     area.appendChild(kontenTab);
 
-    var sub = (location.hash || "").replace(/^#\/stockopname\/?/, "") || "hitung";
-    if (sub !== "sesuaikan") sub = "hitung";
+    var hashSub = (location.hash || "").replace(/^#\/stockopname\/?/, "");
+    // hashSub bisa: "hitung", "sesuaikan", "item/OBATID"
+    var subBagian = hashSub.split("/");
+    var sub = subBagian[0] || "hitung";
+    var subObatId = subBagian[1] || "";
+    if (sub !== "sesuaikan" && sub !== "item") sub = "hitung";
 
     // Muat SO bulan ini dulu, lalu render tab
     kontenTab.appendChild(el("p", { class: "status-koneksi" }, "Memuat data SO..."));
@@ -1170,7 +1174,10 @@
       var lblStatus = el("span", { class: "so-status-label pudar" }, "Status: " + so.status);
       kontenTab.appendChild(lblStatus);
 
-      if (sub === "hitung") {
+      if (sub === "item" && subObatId) {
+        tabSesuaikan.setAttribute("aria-current", "page");
+        renderDetailItem(kontenTab, soId, subObatId);
+      } else if (sub === "hitung") {
         tabHitung.setAttribute("aria-current", "page");
         tahapHitung(kontenTab, soId, lblStatus);
       } else {
@@ -1549,24 +1556,22 @@
       });
   }
 
+  // tahapSesuaikan: daftar per-item (satu baris = satu obat)
   function tahapSesuaikan(area, soId) {
     area.textContent = "";
     area.appendChild(el("p", { class: "status-koneksi" }, "Memuat data untuk penyesuaian..."));
 
-    // Muat batch, dan item SO secara paralel
     Promise.all([
-      daftarSemua("batch", { perPage: 200, sort: "nomor_batch", expand: "obat" }),
+      daftarSemua("batch", { perPage: 500, sort: "nomor_batch", expand: "obat,daftar_obat" }),
       ambilItemSO(soId)
     ]).then(function (hasil) {
-      var d = hasil[0];
-      var soItems = hasil[1];
+      var semuaBatch = hasil[0].items;
+      var soItems = hasil[1].items;
 
-      // Index: batchId → item SO
       var itemIndex = {};
-      soItems.items.forEach(function (si) { itemIndex[si.batch] = si; });
+      soItems.forEach(function (si) { itemIndex[si.batch] = si; });
 
-      var adaItem = soItems.items.length > 0;
-      if (!adaItem) {
+      if (!soItems.length) {
         area.textContent = "";
         area.appendChild(el("section", { class: "panel" }, [
           el("p", { style: "margin:0" }, "Belum ada data penghitungan. Isi jumlah fisik di tab Penghitungan terlebih dahulu.")
@@ -1574,21 +1579,50 @@
         return;
       }
 
-      d.items.forEach(function (b) {
-        b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined)
-          ? b.stok_sistem
-          : (b.stok_awal || 0);
+      semuaBatch.forEach(function (b) {
+        b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
       });
 
-      function fisikOtomatis(b) {
-        return !itemIndex[b.id] && edLewat(b.expired_date);
-      }
       function fisikDari(b) {
         var si = itemIndex[b.id];
         if (si) return Number(si.stok_fisik);
         if (edLewat(b.expired_date)) return 0;
         return null;
       }
+
+      // Kelompokkan batch per obat, hitung selisih total
+      var obatMap = {}; // obatId → { obat, batch[], totalSistem, totalFisik, adaSelisih }
+      semuaBatch.forEach(function (b) {
+        var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
+        var obatId = b.obat || b.daftar_obat || obat.id;
+        if (!obatId) return;
+        if (!obatMap[obatId]) obatMap[obatId] = { obat: obat, obatId: obatId, batch: [], totalSistem: 0, totalFisik: 0, adaNull: false };
+        var fisik = fisikDari(b);
+        obatMap[obatId].batch.push(b);
+        obatMap[obatId].totalSistem += b._stok_sistem;
+        if (fisik === null) { obatMap[obatId].adaNull = true; }
+        else { obatMap[obatId].totalFisik += fisik; }
+      });
+
+      var URUT_KAT = ["A","T","B","F","D","C","E","G","H","I","J","K","L","M","V","W","N","O","P","Q","R","S","X","U","Y"];
+      function urutObat(kode) {
+        if (!kode) return [99, "", ""];
+        var bagian = kode.split("-");
+        var idx = URUT_KAT.indexOf(bagian[0] || "");
+        return [idx === -1 ? 98 : idx, kode];
+      }
+
+      // Filter hanya yang ada selisih (dan tidak semua batch null = belum dihitung)
+      var daftarItem = Object.keys(obatMap).map(function (id) { return obatMap[id]; })
+        .filter(function (item) {
+          if (item.adaNull && item.batch.every(function (b) { return fisikDari(b) === null; })) return false;
+          return item.totalFisik !== item.totalSistem;
+        })
+        .sort(function (a, b) {
+          var ua = urutObat(a.obat.kode), ub = urutObat(b.obat.kode);
+          if (ua[0] !== ub[0]) return ua[0] - ub[0];
+          return (ua[1] || "").localeCompare(ub[1] || "");
+        });
 
       area.textContent = "";
 
@@ -1597,370 +1631,398 @@
         soPesanTerakhir = "";
       }
 
-      var selisih = d.items.filter(function (b) {
-        var fisik = fisikDari(b);
-        if (fisik === null) return false;
-        return fisik !== b._stok_sistem;
-      });
-
-      var URUT_KAT = ["A","T","B","F","D","C","E","G","H","I","J","K","L","M","V","W","N","O","P","Q","R","S","X","U","Y"];
-      function urutObat(kode) {
-        if (!kode) return [99, "", ""];
-        var bagian = kode.split("-");
-        var kat = bagian[0] || "";
-        var idx = URUT_KAT.indexOf(kat);
-        return [idx === -1 ? 98 : idx, kat, kode];
-      }
-
-      selisih.sort(function (a, b) {
-        var oa = (a.expand && (a.expand.obat || a.expand.daftar_obat)) || {};
-        var ob = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
-        var ua = urutObat(oa.kode), ub = urutObat(ob.kode);
-        if (ua[0] !== ub[0]) return ua[0] - ub[0];
-        if (ua[2] < ub[2]) return -1;
-        if (ua[2] > ub[2]) return 1;
-        return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
-      });
-
-      if (!selisih.length) {
+      if (!daftarItem.length) {
         area.appendChild(el("section", { class: "panel" }, [
           el("p", { style: "margin:0" }, "Tidak ada selisih. Semua stok cocok dengan hitungan fisik. 🎉")
         ]));
         return;
       }
 
-      area.appendChild(el("p", {}, selisih.length + " batch memiliki selisih:"));
+      area.appendChild(el("p", {}, daftarItem.length + " obat memiliki selisih:"));
 
-      selisih.forEach(function (b) {
-        var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
-        var siItem = itemIndex[b.id];
-        var fisik = fisikDari(b);
-        var sistem = b._stok_sistem;
-        var diff = fisik - sistem;
+      daftarItem.forEach(function (item) {
+        var diff = item.totalFisik - item.totalSistem;
+        var diffStr = (diff > 0 ? "+" : "") + diff;
+        var diffKelas = diff > 0 ? "lebih" : "kurang";
 
-        var kartu = el("div", { class: "panel so-kartu" });
-
-        // Header kartu: nama, selisih, dan input inline untuk edit stok_fisik
-        var indEdit = el("span", { class: "so-ind", "aria-hidden": "true" }, "");
-        var inpFisikEdit = el("input", {
-          type: "number", min: "0", step: "1",
-          class: "inp-fisik so-inp-inline",
-          value: fisik !== null ? String(fisik) : "",
-          inputmode: "numeric",
-          "aria-label": "Stok fisik " + (obat.nama_utama || "")
-        });
-
-        var stateEdit = { itemId: siItem ? siItem.id : null, saving: false };
-
-        function simpanEdit() {
-          var v = inpFisikEdit.value;
-          if (v === "" || isNaN(Number(v))) return;
-          if (stateEdit.saving) return;
-          stateEdit.saving = true;
-          indEdit.className = "so-ind so-ind-loading";
-          simpanItemSO(soId, b.id, obat.id, Number(v), stateEdit.itemId).then(function (rec) {
-            stateEdit.itemId = rec.id;
-            stateEdit.saving = false;
-            indEdit.className = "so-ind so-ind-ok";
-            // Update diff label
-            var newDiff = Number(v) - sistem;
-            diffSpan.textContent = (newDiff > 0 ? "+" : "") + newDiff;
-            diffSpan.className = "so-selisih-val " + (newDiff > 0 ? "lebih" : (newDiff < 0 ? "kurang" : ""));
-          }, function () {
-            stateEdit.saving = false;
-            indEdit.className = "so-ind so-ind-err";
-          });
-        }
-        inpFisikEdit.addEventListener("blur", simpanEdit);
-        inpFisikEdit.addEventListener("keydown", function (e) {
-          if (e.key === "Enter") { inpFisikEdit.blur(); }
-        });
-
-        var diffSpan = el("span", { class: "so-selisih-val " + (diff > 0 ? "lebih" : "kurang") },
-          (diff > 0 ? "+" : "") + diff);
-
-        var kepalaKartu = el("div", { class: "so-kepala" }, [
-          el("div", { class: "so-nama" }, [
-            el("strong", {}, obat.nama_utama || "-"),
-            el("span", { class: "pudar" }, " · " + (b.nomor_batch || "tanpa batch") + " · ED " + formatED(b.expired_date))
+        var kartu = el("a", {
+          href: "#/stockopname/item/" + item.obatId,
+          class: "panel so-kartu so-kartu-item"
+        }, [
+          el("div", { class: "so-kepala" }, [
+            el("div", { class: "so-nama" }, [
+              el("strong", {}, item.obat.nama_utama || item.obatId),
+              el("span", { class: "pudar" }, " · " + item.batch.length + " batch · " + (item.obat.satuan || ""))
+            ]),
+            el("div", { class: "so-selisih-wrap" }, [
+              el("span", { class: "so-selisih-val " + diffKelas }, diffStr),
+              el("span", { class: "pudar so-satuan" }, " " + (item.obat.satuan || ""))
+            ])
           ]),
-          el("div", { class: "so-selisih-wrap" }, [
-            diffSpan,
-            el("span", { class: "pudar so-satuan" }, " " + (obat.satuan || ""))
-          ])
-        ]);
-        kartu.appendChild(kepalaKartu);
-
-        var ringkasan = el("div", { class: "so-ringkasan" }, [
-          el("div", { class: "so-ringkasan-baris" }, [
-            el("span", { class: "pudar" }, "Stok sistem (batch ini): "),
-            el("strong", {}, formatAngka(sistem))
+          el("div", { class: "so-ringkasan" }, [
+            el("div", { class: "so-ringkasan-baris" }, [
+              el("span", { class: "pudar" }, "Sistem: "),
+              el("strong", {}, formatAngka(item.totalSistem)),
+              el("span", { class: "pudar" }, "   Fisik: "),
+              el("strong", {}, formatAngka(item.totalFisik))
+            ])
           ]),
-          el("div", { class: "so-ringkasan-baris" }, [
-            el("span", { class: "pudar" }, "Fisik: "),
-            inpFisikEdit, indEdit,
-            (fisikOtomatis(b) ? el("span", { class: "pudar" }, " (ED lewat, dianggap 0)") : document.createTextNode(""))
-          ])
+          el("div", { class: "so-kartu-lihat pudar" }, "Lihat detail →")
         ]);
-        kartu.appendChild(ringkasan);
-
-        var areaTransaksi = el("div", { class: "so-transaksi", hidden: true });
-
-        var tombolDetail = el("button", { type: "button", class: "btn btn-garis so-btn-detail" }, "Lihat transaksi batch ini");
-        tombolDetail.addEventListener("click", function () {
-          if (!areaTransaksi.hidden) {
-            areaTransaksi.hidden = true;
-            tombolDetail.textContent = "Lihat transaksi batch ini";
-            return;
-          }
-          tombolDetail.textContent = "Memuat...";
-          tombolDetail.disabled = true;
-
-          Promise.all([
-            daftarSemua("mutasi", { filter: 'obat = "' + obat.id + '"', sort: "-tanggal", expand: "unit,batch", perPage: 200 }),
-            daftarSemua("batch", { filter: 'obat = "' + obat.id + '"', sort: "nomor_batch", perPage: 200 })
-          ]).then(function (hasilTx) {
-            var semuaTx = hasilTx[0].items;
-            var batchObat = hasilTx[1].items;
-            areaTransaksi.textContent = "";
-            areaTransaksi.hidden = false;
-            tombolDetail.textContent = "Sembunyikan transaksi";
-            tombolDetail.disabled = false;
-
-            function labelBatch(bt) {
-              if (!bt) return "tanpa batch";
-              return (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "");
-            }
-            function namaBatchTx(tx) {
-              if (!tx.batch) return "tanpa batch";
-              return labelBatch((tx.expand && tx.expand.batch) || batchObat.filter(function (x) { return x.id === tx.batch; })[0]);
-            }
-            function opsiBatch(termasukKosong) {
-              var daftar = termasukKosong ? [el("option", { value: "" }, "— tanpa relasi batch —")] : [];
-              batchObat.forEach(function (bt) {
-                daftar.push(el("option", { value: bt.id }, labelBatch(bt) + " · stok " + (bt.stok_sistem !== undefined && bt.stok_sistem !== null ? bt.stok_sistem : 0)));
-              });
-              return daftar;
-            }
-
-            // Filter: semua atau batch ini saja
-            var filterIni = false;
-            var tombolFilter = el("button", { type: "button", class: "btn btn-garis so-btn-filter-tx" },
-              "Tampilkan batch ini saja");
-            tombolFilter.addEventListener("click", function () {
-              filterIni = !filterIni;
-              tombolFilter.textContent = filterIni ? "Tampilkan semua batch" : "Tampilkan batch ini saja";
-              gambar();
-            });
-            areaTransaksi.appendChild(tombolFilter);
-
-            var pesanEditGlobal = el("p", { class: "pesan", hidden: true });
-            areaTransaksi.appendChild(pesanEditGlobal);
-
-            var wadahTabel = el("div", {});
-            areaTransaksi.appendChild(wadahTabel);
-
-            // Hitung sisa berjalan dari array transaksi (diurutkan tanggal asc)
-            function hitungSisa(daftar) {
-              var sisa = 0;
-              return daftar.map(function (tx) {
-                var j = Number(tx.jumlah) || 0;
-                if (tx.jenis === "masuk") sisa += j; else sisa -= j;
-                return sisa;
-              });
-            }
-
-            function gambar() {
-              var tampil = filterIni
-                ? semuaTx.filter(function (tx) { return tx.batch === b.id; })
-                : semuaTx;
-              // Urutkan asc untuk sisa berjalan
-              var terurut = tampil.slice().sort(function (a, c) {
-                return (a.tanggal || "").localeCompare(c.tanggal || "") || (a.id || "").localeCompare(c.id || "");
-              });
-              var sisaArr = hitungSisa(terurut);
-              wadahTabel.textContent = "";
-
-              if (!terurut.length) {
-                wadahTabel.appendChild(el("p", { class: "pudar", style: "margin:4px 0 8px" }, "Tidak ada transaksi."));
-                return;
-              }
-
-              var thead = el("thead", {}, [el("tr", {}, [
-                el("th", {}, "Tanggal"),
-                el("th", {}, "Dari / Ke"),
-                el("th", {}, "Batch"),
-                el("th", { class: "n" }, "Masuk"),
-                el("th", { class: "n" }, "Keluar"),
-                el("th", { class: "n" }, "Sisa"),
-                el("th", {}, "")  // kolom hapus
-              ])]);
-              var tbody = el("tbody", {});
-
-              terurut.forEach(function (tx, idx) {
-                var isBatchIni = tx.batch === b.id;
-                var unitNama = (tx.expand && tx.expand.unit && tx.expand.unit.nama) || tx.unit || "-";
-                var sisaVal = sisaArr[idx];
-                var jumlah = Number(tx.jumlah) || 0;
-
-                // --- Sel tanggal (editable) ---
-                var tdTgl = el("td", { "data-label": "Tanggal", class: "so-td-edit" });
-                var spanTgl = el("span", {}, tx.tanggal ? tx.tanggal.slice(0, 10) : "—");
-                var inpTgl = el("input", { type: "date", class: "so-inp-tabel", value: tx.tanggal ? tx.tanggal.slice(0, 10) : "", hidden: true });
-                var indTgl = el("span", { class: "so-ind", "aria-hidden": "true" }, "");
-                tdTgl.appendChild(spanTgl); tdTgl.appendChild(inpTgl); tdTgl.appendChild(indTgl);
-                spanTgl.addEventListener("click", function () {
-                  spanTgl.hidden = true; inpTgl.hidden = false; inpTgl.focus();
-                });
-                inpTgl.addEventListener("blur", function () {
-                  if (!inpTgl.value) { spanTgl.hidden = false; inpTgl.hidden = true; return; }
-                  if (inpTgl.value === (tx.tanggal ? tx.tanggal.slice(0, 10) : "")) {
-                    spanTgl.hidden = false; inpTgl.hidden = true; return;
-                  }
-                  indTgl.className = "so-ind so-ind-loading";
-                  LPLPO.ubah("mutasi", tx.id, { tanggal: inpTgl.value }).then(function () {
-                    tx.tanggal = inpTgl.value;
-                    spanTgl.textContent = inpTgl.value;
-                    spanTgl.hidden = false; inpTgl.hidden = true;
-                    indTgl.className = "so-ind so-ind-ok";
-                    gambar();
-                  }, function () {
-                    indTgl.className = "so-ind so-ind-err";
-                    spanTgl.hidden = false; inpTgl.hidden = true;
-                  });
-                });
-
-                // --- Sel batch (dropdown editable, lazy load) ---
-                var tdBatch = el("td", { "data-label": "Batch", class: "so-td-edit" });
-                var spanBatch = el("span", {}, namaBatchTx(tx));
-                var selBatch = el("select", { class: "so-pilih-mutasi", hidden: true });
-                var indBatch = el("span", { class: "so-ind", "aria-hidden": "true" }, "");
-                var batchOpsLoaded = false;
-                tdBatch.appendChild(spanBatch); tdBatch.appendChild(selBatch); tdBatch.appendChild(indBatch);
-                spanBatch.addEventListener("click", function () {
-                  if (!batchOpsLoaded) {
-                    batchOpsLoaded = true;
-                    opsiBatch(true).forEach(function (opt) { selBatch.appendChild(opt); });
-                    selBatch.value = tx.batch || "";
-                  }
-                  spanBatch.hidden = true; selBatch.hidden = false; selBatch.focus();
-                });
-                selBatch.addEventListener("change", function () {
-                  indBatch.className = "so-ind so-ind-loading";
-                  LPLPO.ubah("mutasi", tx.id, { batch: selBatch.value }).then(function () {
-                    tx.batch = selBatch.value;
-                    // Update nama tampil
-                    var bt = batchObat.filter(function (x) { return x.id === selBatch.value; })[0];
-                    spanBatch.textContent = bt ? labelBatch(bt) : "tanpa batch";
-                    spanBatch.hidden = false; selBatch.hidden = true;
-                    indBatch.className = "so-ind so-ind-ok";
-                  }, function () {
-                    indBatch.className = "so-ind so-ind-err";
-                    spanBatch.hidden = false; selBatch.hidden = true;
-                  });
-                });
-                selBatch.addEventListener("blur", function () {
-                  setTimeout(function () { spanBatch.hidden = false; selBatch.hidden = true; }, 200);
-                });
-
-                // --- Sel jumlah (editable, masuk atau keluar) ---
-                var tdMasuk = el("td", { "data-label": "Masuk", class: "n so-td-edit" });
-                var tdKeluar = el("td", { "data-label": "Keluar", class: "n so-td-edit" });
-                var tdSisa = el("td", { "data-label": "Sisa", class: "n" + (sisaVal < 0 ? " ks-negatif" : "") }, formatAngka(sisaVal));
-
-                function buatSelJumlah(td) {
-                  var spanJ = el("span", {}, formatAngka(jumlah));
-                  var inpJ = el("input", { type: "number", min: "1", step: "1", class: "so-inp-tabel so-inp-jumlah-tabel", value: String(jumlah), hidden: true, inputmode: "numeric" });
-                  var indJ = el("span", { class: "so-ind", "aria-hidden": "true" }, "");
-                  td.appendChild(spanJ); td.appendChild(inpJ); td.appendChild(indJ);
-                  spanJ.addEventListener("click", function () {
-                    spanJ.hidden = true; inpJ.hidden = false; inpJ.focus(); inpJ.select();
-                  });
-                  inpJ.addEventListener("blur", function () {
-                    var v = Number(inpJ.value);
-                    if (!v || v < 1) { spanJ.hidden = false; inpJ.hidden = true; return; }
-                    if (v === jumlah) { spanJ.hidden = false; inpJ.hidden = true; return; }
-                    indJ.className = "so-ind so-ind-loading";
-                    LPLPO.ubah("mutasi", tx.id, { jumlah: v }).then(function () {
-                      tx.jumlah = v; jumlah = v;
-                      spanJ.textContent = formatAngka(v);
-                      spanJ.hidden = false; inpJ.hidden = true;
-                      indJ.className = "so-ind so-ind-ok";
-                      gambar(); // recalculate sisa
-                    }, function () {
-                      indJ.className = "so-ind so-ind-err";
-                      spanJ.hidden = false; inpJ.hidden = true;
-                    });
-                  });
-                  inpJ.addEventListener("keydown", function (e) {
-                    if (e.key === "Enter") inpJ.blur();
-                    if (e.key === "Escape") { inpJ.value = String(jumlah); inpJ.blur(); }
-                  });
-                }
-
-                if (tx.jenis === "masuk") {
-                  buatSelJumlah(tdMasuk);
-                  tdKeluar.textContent = "";
-                } else {
-                  tdMasuk.textContent = "";
-                  buatSelJumlah(tdKeluar);
-                }
-
-                // --- Tombol hapus ---
-                var tdHapus = el("td", {});
-                var tombolH = el("button", { type: "button", class: "btn btn-bahaya so-btn-hapus-tx", title: "Hapus mutasi ini", "aria-label": "Hapus" }, "✕");
-                tombolH.addEventListener("click", function () {
-                  var label = (tx.tanggal ? tx.tanggal.slice(0, 10) : "") + " · " + (tx.jenis === "masuk" ? "Masuk" : "Keluar") + " " + jumlah + " · " + unitNama;
-                  if (!window.confirm("Hapus mutasi ini?\n" + label + "\n\nTidak bisa dibatalkan.")) return;
-                  tombolH.disabled = true;
-                  hapusRecord("mutasi", tx.id).then(function () {
-                    soPesanTerakhir = "Mutasi dihapus.";
-                    tahapSesuaikan(area, soId);
-                  }, function (err) {
-                    pesanEditGlobal.textContent = (err && (err.pesan || err.message)) || "Gagal menghapus.";
-                    pesanEditGlobal.className = "pesan galat"; pesanEditGlobal.hidden = false;
-                    tombolH.disabled = false;
-                  });
-                });
-                tdHapus.appendChild(tombolH);
-
-                var tr = el("tr", { class: isBatchIni ? "so-tx-tr-ini" : "" }, [
-                  tdTgl,
-                  el("td", { "data-label": "Dari / Ke" }, unitNama),
-                  tdBatch, tdMasuk, tdKeluar, tdSisa, tdHapus
-                ]);
-                tbody.appendChild(tr);
-              });
-
-              var tabel = el("table", { class: "kartu so-tx-tabel" }, [thead, tbody]);
-              wadahTabel.appendChild(el("div", { class: "tabel-gulir" }, [tabel]));
-              wadahTabel.appendChild(el("p", { class: "pudar", style: "margin:4px 0 8px; font-size:13px" },
-                "Klik tanggal, batch, atau jumlah untuk mengedit langsung. Baris tebal = batch yang sedang dibuka."));
-            }
-
-            gambar();
-
-            muatUnitUntukSO(areaTransaksi, b, obat, batchObat, function (pesan) {
-              soPesanTerakhir = pesan;
-              tahapSesuaikan(area, soId);
-            });
-
-          }, function (err) {
-            areaTransaksi.textContent = "";
-            areaTransaksi.hidden = false;
-            areaTransaksi.appendChild(el("p", { class: "pesan galat" }, (err && err.pesan) || "Gagal memuat transaksi."));
-            tombolDetail.textContent = "Lihat transaksi batch ini";
-            tombolDetail.disabled = false;
-          });
-        });
-
-        kartu.appendChild(tombolDetail);
-        kartu.appendChild(areaTransaksi);
         area.appendChild(kartu);
       });
 
     }, function (err) {
       tanganiGalat(err, function () { tahapSesuaikan(area, soId); }, area);
+    });
+  }
+
+  // renderDetailItem: halaman detail per obat di tab Penyesuaian
+  function renderDetailItem(area, soId, obatId) {
+    area.textContent = "";
+    area.appendChild(el("p", { class: "status-koneksi" }, "Memuat detail..."));
+
+    Promise.all([
+      LPLPO.ambil("daftar_obat", obatId),
+      daftarSemua("batch", { perPage: 200, filter: 'obat = "' + obatId + '"', sort: "nomor_batch" }),
+      daftarSemua("mutasi", { perPage: 500, filter: 'obat = "' + obatId + '" && status = "confirmed"', sort: "tanggal,id", expand: "unit,batch" }),
+      ambilItemSO(soId)
+    ]).then(function (hasil) {
+      var obat = hasil[0];
+      var batchObat = hasil[1].items;
+      var semuaTx = hasil[2].items;
+      var soItems = hasil[3].items;
+
+      var itemIndex = {};
+      soItems.forEach(function (si) { itemIndex[si.batch] = si; });
+
+      function fisikDari(b) {
+        var si = itemIndex[b.id];
+        if (si) return Number(si.stok_fisik);
+        if (edLewat(b.expired_date)) return 0;
+        return null;
+      }
+
+      batchObat.forEach(function (b) {
+        b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
+      });
+
+      area.textContent = "";
+
+      // Tombol kembali
+      var tombolKembali = el("a", { href: "#/stockopname/sesuaikan", class: "btn btn-garis so-btn-kembali" }, "← Kembali");
+      area.appendChild(tombolKembali);
+
+      // Header item
+      var headerItem = el("div", { class: "panel so-detail-header" }, [
+        el("h2", { style: "margin:0 0 4px" }, obat.nama_utama || obatId),
+        el("span", { class: "pudar" }, obat.kode || "")
+      ]);
+      area.appendChild(headerItem);
+
+      // --- Bagian 1: Ringkasan per batch ---
+      var batchSelisih = batchObat.filter(function (b) {
+        var fisik = fisikDari(b);
+        return fisik !== null && fisik !== b._stok_sistem;
+      });
+
+      var seksiBatch = el("div", { class: "panel" });
+      seksiBatch.appendChild(el("h3", { style: "margin:0 0 8px; font-size:15px" }, "Selisih per batch"));
+
+      if (!batchSelisih.length) {
+        seksiBatch.appendChild(el("p", { class: "pudar", style: "margin:0" }, "Tidak ada selisih per batch."));
+      } else {
+        var pesanBatch = el("p", { class: "pesan", hidden: true });
+        seksiBatch.appendChild(pesanBatch);
+
+        batchSelisih.forEach(function (b) {
+          var fisik = fisikDari(b);
+          var sistem = b._stok_sistem;
+          var diff = fisik - sistem;
+          var siItem = itemIndex[b.id];
+
+          var indEdit = el("span", { class: "so-ind", "aria-hidden": "true" });
+          var inpFisik = el("input", {
+            type: "number", min: "0", step: "1",
+            class: "inp-fisik so-inp-inline",
+            value: fisik !== null ? String(fisik) : "",
+            inputmode: "numeric",
+            "aria-label": "Fisik " + (b.nomor_batch || "")
+          });
+          var diffSpan = el("span", { class: "so-selisih-val " + (diff > 0 ? "lebih" : "kurang") }, (diff > 0 ? "+" : "") + diff);
+          var stateB = { itemId: siItem ? siItem.id : null };
+
+          inpFisik.addEventListener("blur", function () {
+            var v = inpFisik.value;
+            if (v === "" || isNaN(Number(v))) return;
+            indEdit.className = "so-ind so-ind-loading";
+            simpanItemSO(soId, b.id, obatId, Number(v), stateB.itemId).then(function (rec) {
+              stateB.itemId = rec.id;
+              indEdit.className = "so-ind so-ind-ok";
+              var nd = Number(v) - sistem;
+              diffSpan.textContent = (nd > 0 ? "+" : "") + nd;
+              diffSpan.className = "so-selisih-val " + (nd > 0 ? "lebih" : (nd < 0 ? "kurang" : ""));
+            }, function () { indEdit.className = "so-ind so-ind-err"; });
+          });
+          inpFisik.addEventListener("keydown", function (e) { if (e.key === "Enter") inpFisik.blur(); });
+
+          seksiBatch.appendChild(el("div", { class: "so-batch-baris-detail" }, [
+            el("div", { class: "so-batch-info" }, [
+              el("span", { class: "so-batch-no" }, b.nomor_batch || "tanpa batch"),
+              el("span", { class: "pudar" }, b.expired_date ? " · ED " + formatED(b.expired_date) : "")
+            ]),
+            el("div", { class: "so-batch-stok" }, [
+              el("span", { class: "pudar" }, "Sistem: "),
+              el("strong", {}, formatAngka(sistem)),
+              el("span", { class: "pudar" }, "  Fisik: "),
+              inpFisik, indEdit
+            ]),
+            el("div", { class: "so-batch-diff" }, [diffSpan, el("span", { class: "pudar" }, " " + (obat.satuan || ""))])
+          ]));
+        });
+      }
+      area.appendChild(seksiBatch);
+
+      // --- Bagian 2: Merge batch ---
+      var seksiMerge = el("div", { class: "panel" });
+      seksiMerge.appendChild(el("h3", { style: "margin:0 0 8px; font-size:15px" }, "Gabungkan batch"));
+      seksiMerge.appendChild(el("p", { class: "pudar", style: "margin:0 0 8px; font-size:13px" },
+        "Pilih dua batch yang sebenarnya sama (misal beda kapitalisasi) untuk digabungkan. Semua transaksi akan dipindah ke batch tujuan."));
+
+      var pesanMerge = el("p", { class: "pesan", hidden: true });
+
+      function labelBatch(bt) {
+        return (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "") + " · stok " + bt._stok_sistem;
+      }
+
+      var pilAsal = el("select", { class: "so-pilih-mutasi" },
+        [el("option", { value: "" }, "— Batch asal (akan dihapus) —")].concat(
+          batchObat.map(function (bt) { return el("option", { value: bt.id }, labelBatch(bt)); })
+        ));
+      var pilTujuan = el("select", { class: "so-pilih-mutasi" },
+        [el("option", { value: "" }, "— Batch tujuan (dipertahankan) —")].concat(
+          batchObat.map(function (bt) { return el("option", { value: bt.id }, labelBatch(bt)); })
+        ));
+      var tombolMerge = el("button", { type: "button", class: "btn btn-bahaya", disabled: true }, "Gabungkan");
+
+      function cekMerge() {
+        tombolMerge.disabled = !pilAsal.value || !pilTujuan.value || pilAsal.value === pilTujuan.value;
+      }
+      pilAsal.addEventListener("change", cekMerge);
+      pilTujuan.addEventListener("change", cekMerge);
+
+      tombolMerge.addEventListener("click", function () {
+        var asalId = pilAsal.value;
+        var tujuanId = pilTujuan.value;
+        var asalLabel = pilAsal.options[pilAsal.selectedIndex].textContent;
+        var tujuanLabel = pilTujuan.options[pilTujuan.selectedIndex].textContent;
+        if (!window.confirm("Gabungkan batch?\n\nAsal: " + asalLabel + "\nTujuan: " + tujuanLabel + "\n\nSemua transaksi dari batch asal akan dipindah ke batch tujuan, lalu batch asal dihapus.\nTidak bisa dibatalkan.")) return;
+
+        tombolMerge.disabled = true;
+        tombolMerge.textContent = "Menggabungkan...";
+        pesanMerge.hidden = true;
+
+        // Ambil semua mutasi batch asal, patch ke tujuan, lalu hapus batch asal
+        daftarSemua("mutasi", { filter: 'batch = "' + asalId + '"', perPage: 500 }).then(function (txAsal) {
+          var patchAll = txAsal.items.map(function (tx) {
+            return LPLPO.ubah("mutasi", tx.id, { batch: tujuanId });
+          });
+          return Promise.all(patchAll);
+        }).then(function () {
+          return hapusRecord("batch", asalId);
+        }).then(function () {
+          pesanMerge.textContent = "Batch berhasil digabungkan.";
+          pesanMerge.className = "pesan info"; pesanMerge.hidden = false;
+          // Reload halaman ini
+          renderDetailItem(area, soId, obatId);
+        }, function (err) {
+          pesanMerge.textContent = (err && (err.pesan || err.message)) || "Gagal menggabungkan batch.";
+          pesanMerge.className = "pesan galat"; pesanMerge.hidden = false;
+          tombolMerge.disabled = false; tombolMerge.textContent = "Gabungkan";
+        });
+      });
+
+      seksiMerge.appendChild(el("div", { class: "so-merge-baris" }, [pilAsal, pilTujuan, tombolMerge]));
+      seksiMerge.appendChild(pesanMerge);
+      area.appendChild(seksiMerge);
+
+      // --- Bagian 3: Kartu stok editable ---
+      var seksiTx = el("div", { class: "panel" });
+      seksiTx.appendChild(el("h3", { style: "margin:0 0 8px; font-size:15px" }, "Riwayat transaksi"));
+
+      var totalStokAwal = batchObat.reduce(function (acc, bt) { return acc + (Number(bt.stok_awal) || 0); }, 0);
+
+      var pesanTxGlobal = el("p", { class: "pesan", hidden: true });
+      seksiTx.appendChild(pesanTxGlobal);
+
+      var wadahTabel = el("div", {});
+      seksiTx.appendChild(wadahTabel);
+
+      function labelBatchTx(tx) {
+        if (!tx.batch) return "tanpa batch";
+        var bt = (tx.expand && tx.expand.batch) || batchObat.filter(function (x) { return x.id === tx.batch; })[0];
+        if (!bt) return "?";
+        return (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "");
+      }
+      function opsiBatch() {
+        return [el("option", { value: "" }, "— tanpa relasi batch —")].concat(
+          batchObat.map(function (bt) {
+            return el("option", { value: bt.id }, (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "") + " · stok " + bt._stok_sistem);
+          })
+        );
+      }
+
+      function hitungSisa(daftar) {
+        var sisa = totalStokAwal;
+        return daftar.map(function (tx) {
+          var j = Number(tx.jumlah) || 0;
+          if (tx.jenis === "masuk") sisa += j; else sisa -= j;
+          return sisa;
+        });
+      }
+
+      function gambarTabel() {
+        var terurut = semuaTx.slice().sort(function (a, c) {
+          return (a.tanggal || "").localeCompare(c.tanggal || "") || (a.id || "").localeCompare(c.id || "");
+        });
+        var sisaArr = hitungSisa(terurut);
+        wadahTabel.textContent = "";
+
+        var thead = el("thead", {}, [el("tr", {}, [
+          el("th", {}, "Tanggal"),
+          el("th", {}, "Dari / Ke"),
+          el("th", {}, "Batch"),
+          el("th", { class: "n" }, "Masuk"),
+          el("th", { class: "n" }, "Keluar"),
+          el("th", { class: "n" }, "Sisa"),
+          el("th", {}, "")
+        ])]);
+        var tbody = el("tbody", {});
+
+        // Baris saldo awal (statis)
+        tbody.appendChild(el("tr", { class: "so-tx-tr-awal" }, [
+          el("td", { "data-label": "Tanggal", class: "pudar" }, "Saldo awal"),
+          el("td", { "data-label": "Dari / Ke" }, ""),
+          el("td", { "data-label": "Batch" }, ""),
+          el("td", { "data-label": "Masuk", class: "n" }, formatAngka(totalStokAwal)),
+          el("td", { "data-label": "Keluar", class: "n" }, ""),
+          el("td", { "data-label": "Sisa", class: "n" }, formatAngka(totalStokAwal)),
+          el("td", {}, "")
+        ]));
+
+        terurut.forEach(function (tx, idx) {
+          var unitNama = (tx.expand && tx.expand.unit && tx.expand.unit.nama) || "-";
+          var sisaVal = sisaArr[idx];
+          var jumlah = Number(tx.jumlah) || 0;
+
+          // Tanggal editable
+          var tdTgl = el("td", { "data-label": "Tanggal", class: "so-td-edit" });
+          var spanTgl = el("span", {}, tx.tanggal ? tx.tanggal.slice(0, 10) : "—");
+          var inpTgl = el("input", { type: "date", class: "so-inp-tabel", value: tx.tanggal ? tx.tanggal.slice(0, 10) : "", hidden: true });
+          var indTgl = el("span", { class: "so-ind", "aria-hidden": "true" });
+          tdTgl.appendChild(spanTgl); tdTgl.appendChild(inpTgl); tdTgl.appendChild(indTgl);
+          spanTgl.addEventListener("click", function () { spanTgl.hidden = true; inpTgl.hidden = false; inpTgl.focus(); });
+          inpTgl.addEventListener("blur", function () {
+            if (!inpTgl.value || inpTgl.value === (tx.tanggal ? tx.tanggal.slice(0, 10) : "")) { spanTgl.hidden = false; inpTgl.hidden = true; return; }
+            indTgl.className = "so-ind so-ind-loading";
+            LPLPO.ubah("mutasi", tx.id, { tanggal: inpTgl.value }).then(function () {
+              tx.tanggal = inpTgl.value; spanTgl.textContent = inpTgl.value;
+              spanTgl.hidden = false; inpTgl.hidden = true; indTgl.className = "so-ind so-ind-ok";
+              gambarTabel();
+            }, function () { indTgl.className = "so-ind so-ind-err"; spanTgl.hidden = false; inpTgl.hidden = true; });
+          });
+
+          // Batch editable (dropdown)
+          var tdBatch = el("td", { "data-label": "Batch", class: "so-td-edit" });
+          var spanBatch = el("span", {}, labelBatchTx(tx));
+          var selBatch = el("select", { class: "so-pilih-mutasi", hidden: true });
+          var indBatch = el("span", { class: "so-ind", "aria-hidden": "true" });
+          var batchOpsLoaded = false;
+          tdBatch.appendChild(spanBatch); tdBatch.appendChild(selBatch); tdBatch.appendChild(indBatch);
+          spanBatch.addEventListener("click", function () {
+            if (!batchOpsLoaded) { batchOpsLoaded = true; opsiBatch().forEach(function (opt) { selBatch.appendChild(opt); }); selBatch.value = tx.batch || ""; }
+            spanBatch.hidden = true; selBatch.hidden = false; selBatch.focus();
+          });
+          selBatch.addEventListener("change", function () {
+            indBatch.className = "so-ind so-ind-loading";
+            LPLPO.ubah("mutasi", tx.id, { batch: selBatch.value || null }).then(function () {
+              tx.batch = selBatch.value;
+              var bt = batchObat.filter(function (x) { return x.id === selBatch.value; })[0];
+              spanBatch.textContent = bt ? (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "") : "tanpa batch";
+              spanBatch.hidden = false; selBatch.hidden = true; indBatch.className = "so-ind so-ind-ok";
+            }, function () { indBatch.className = "so-ind so-ind-err"; spanBatch.hidden = false; selBatch.hidden = true; });
+          });
+          selBatch.addEventListener("blur", function () { setTimeout(function () { spanBatch.hidden = false; selBatch.hidden = true; }, 200); });
+
+          // Jumlah editable
+          var tdMasuk = el("td", { "data-label": "Masuk", class: "n so-td-edit" });
+          var tdKeluar = el("td", { "data-label": "Keluar", class: "n so-td-edit" });
+          var tdSisa = el("td", { "data-label": "Sisa", class: "n" + (sisaVal < 0 ? " ks-negatif" : "") }, formatAngka(sisaVal));
+
+          function buatSelJ(td) {
+            var spanJ = el("span", {}, formatAngka(jumlah));
+            var inpJ = el("input", { type: "number", min: "1", step: "1", class: "so-inp-tabel so-inp-jumlah-tabel", value: String(jumlah), hidden: true, inputmode: "numeric" });
+            var indJ = el("span", { class: "so-ind", "aria-hidden": "true" });
+            td.appendChild(spanJ); td.appendChild(inpJ); td.appendChild(indJ);
+            spanJ.addEventListener("click", function () { spanJ.hidden = true; inpJ.hidden = false; inpJ.focus(); inpJ.select(); });
+            inpJ.addEventListener("blur", function () {
+              var v = Number(inpJ.value);
+              if (!v || v < 1) { spanJ.hidden = false; inpJ.hidden = true; return; }
+              if (v === jumlah) { spanJ.hidden = false; inpJ.hidden = true; return; }
+              indJ.className = "so-ind so-ind-loading";
+              LPLPO.ubah("mutasi", tx.id, { jumlah: v }).then(function () {
+                tx.jumlah = v; jumlah = v; spanJ.textContent = formatAngka(v);
+                spanJ.hidden = false; inpJ.hidden = true; indJ.className = "so-ind so-ind-ok";
+                gambarTabel();
+              }, function () { indJ.className = "so-ind so-ind-err"; spanJ.hidden = false; inpJ.hidden = true; });
+            });
+            inpJ.addEventListener("keydown", function (e) {
+              if (e.key === "Enter") inpJ.blur();
+              if (e.key === "Escape") { inpJ.value = String(jumlah); inpJ.blur(); }
+            });
+          }
+
+          if (tx.jenis === "masuk") { buatSelJ(tdMasuk); tdKeluar.textContent = ""; }
+          else { tdMasuk.textContent = ""; buatSelJ(tdKeluar); }
+
+          // Hapus
+          var tdHapus = el("td", {});
+          var tombolH = el("button", { type: "button", class: "btn btn-bahaya so-btn-hapus-tx", title: "Hapus", "aria-label": "Hapus" }, "✕");
+          tombolH.addEventListener("click", function () {
+            var label = (tx.tanggal ? tx.tanggal.slice(0, 10) : "") + " · " + (tx.jenis === "masuk" ? "Masuk" : "Keluar") + " " + jumlah + " · " + unitNama;
+            if (!window.confirm("Hapus mutasi ini?\n" + label + "\n\nTidak bisa dibatalkan.")) return;
+            tombolH.disabled = true;
+            hapusRecord("mutasi", tx.id).then(function () {
+              semuaTx.splice(semuaTx.indexOf(tx), 1);
+              gambarTabel();
+            }, function (err) {
+              pesanTxGlobal.textContent = (err && (err.pesan || err.message)) || "Gagal menghapus.";
+              pesanTxGlobal.className = "pesan galat"; pesanTxGlobal.hidden = false;
+              tombolH.disabled = false;
+            });
+          });
+          tdHapus.appendChild(tombolH);
+
+          tbody.appendChild(el("tr", {}, [tdTgl, el("td", { "data-label": "Dari / Ke" }, unitNama), tdBatch, tdMasuk, tdKeluar, tdSisa, tdHapus]));
+        });
+
+        var tabel = el("table", { class: "kartu so-tx-tabel" }, [thead, tbody]);
+        wadahTabel.appendChild(el("div", { class: "tabel-gulir" }, [tabel]));
+        wadahTabel.appendChild(el("p", { class: "pudar", style: "margin:4px 0 8px; font-size:13px" }, "Klik tanggal, batch, atau jumlah untuk mengedit langsung."));
+      }
+
+      gambarTabel();
+
+      // Form tambah mutasi
+      muatUnitUntukSO(seksiTx, batchObat[0] || { id: "", nomor_batch: "" }, obat, batchObat, function (pesan) {
+        soPesanTerakhir = pesan;
+        renderDetailItem(area, soId, obatId);
+      });
+
+      area.appendChild(seksiTx);
+
+    }, function (err) {
+      tanganiGalat(err, function () { renderDetailItem(area, soId, obatId); }, area);
     });
   }
 

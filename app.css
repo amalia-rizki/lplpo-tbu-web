@@ -492,3 +492,38 @@
   background: var(--kartu); color: var(--tinta); font-size: 14px; font-family: var(--font-form);
   vertical-align: middle; margin-bottom: 6px;
 }
+
+/* SO tab Penyesuaian: kartu item (per obat, bisa diklik) */
+.so-kartu-item {
+  display: block; text-decoration: none; color: inherit;
+  transition: box-shadow 0.15s;
+}
+.so-kartu-item:hover { box-shadow: 0 0 0 2px var(--aksen, #3b82f6); }
+.so-kartu-lihat { font-size: 13px; margin-top: 4px; text-align: right; }
+
+/* SO tab Penyesuaian: tombol kembali */
+.so-btn-kembali { display: inline-block; margin-bottom: 12px; }
+
+/* SO detail item: header */
+.so-detail-header h2 { font-size: 18px; }
+
+/* SO detail item: baris per batch di ringkasan selisih */
+.so-batch-baris-detail {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid var(--garis);
+}
+.so-batch-baris-detail:last-child { border-bottom: none; }
+.so-batch-info { flex: 1 1 160px; }
+.so-batch-no   { font-weight: 600; }
+.so-batch-stok { flex: 2 1 200px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.so-batch-diff { flex: 0 0 auto; text-align: right; }
+
+/* SO detail item: form merge batch */
+.so-merge-baris {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;
+}
+.so-merge-baris select { flex: 1 1 160px; }
+
+/* SO tabel transaksi: baris saldo awal */
+.so-tx-tr-awal td { font-style: italic; color: var(--tinta-pudar); }
+.so-tx-tr-awal .n { font-style: normal; font-weight: 600; color: var(--tinta); }
