@@ -1852,9 +1852,49 @@
 
       // --- Bagian 3: Kartu stok editable ---
       var seksiTx = el("div", { class: "panel" });
-      seksiTx.appendChild(el("h3", { style: "margin:0 0 8px; font-size:15px" }, "Riwayat transaksi"));
+      var headerTx = el("div", { class: "so-tx-header" }, [
+        el("h3", { style: "margin:0; font-size:15px" }, "Riwayat transaksi")
+      ]);
+      seksiTx.appendChild(headerTx);
 
       var totalStokAwal = batchObat.reduce(function (acc, bt) { return acc + (Number(bt.stok_awal) || 0); }, 0);
+
+      // Tombol recalc stok_sistem semua batch obat ini
+      var indRecalc = el("span", { class: "so-ind", "aria-hidden": "true" });
+      var tombolRecalc = el("button", { type: "button", class: "btn btn-garis", style: "font-size:13px" }, "⟳ Recalc stok sistem");
+      tombolRecalc.addEventListener("click", function () {
+        tombolRecalc.disabled = true;
+        indRecalc.className = "so-ind so-ind-loading";
+
+        // Hitung stok_sistem per batch dari semuaTx + stok_awal
+        var sisaBatch = {};
+        batchObat.forEach(function (bt) { sisaBatch[bt.id] = Number(bt.stok_awal) || 0; });
+        semuaTx.forEach(function (tx) {
+          if (!tx.batch) return;
+          var j = Number(tx.jumlah) || 0;
+          if (!(tx.batch in sisaBatch)) sisaBatch[tx.batch] = 0;
+          if (tx.jenis === "masuk") sisaBatch[tx.batch] += j;
+          else sisaBatch[tx.batch] -= j;
+        });
+
+        // PATCH semua batch sekaligus
+        var patches = batchObat.map(function (bt) {
+          return LPLPO.ubah("batch", bt.id, { stok_sistem: sisaBatch[bt.id] || 0 }).then(function () {
+            bt._stok_sistem = sisaBatch[bt.id] || 0;
+            bt.stok_sistem = bt._stok_sistem;
+          });
+        });
+        Promise.all(patches).then(function () {
+          indRecalc.className = "so-ind so-ind-ok";
+          tombolRecalc.disabled = false;
+          // Reload halaman agar selisih per batch terupdate
+          renderDetailItem(area, soId, obatId);
+        }, function () {
+          indRecalc.className = "so-ind so-ind-err";
+          tombolRecalc.disabled = false;
+        });
+      });
+      headerTx.appendChild(el("div", { style: "display:flex;gap:8px;align-items:center;margin-top:6px" }, [tombolRecalc, indRecalc]));
 
       var pesanTxGlobal = el("p", { class: "pesan", hidden: true });
       seksiTx.appendChild(pesanTxGlobal);
