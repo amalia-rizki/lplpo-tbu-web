@@ -1208,7 +1208,8 @@
       kartuPilih.appendChild(el("p", { class: "pudar", style: "margin:0 0 8px; font-size:13px" }, "Atau buat stockopname baru untuk periode tertentu:"));
 
       var now = new Date();
-      var tglDefault = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-01";
+      var akhirBulan = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      var tglDefault = akhirBulan.getFullYear() + "-" + String(akhirBulan.getMonth() + 1).padStart(2, "0") + "-" + String(akhirBulan.getDate()).padStart(2, "0");
       var inpTgl = el("input", { type: "date", class: "so-inp-edit", value: tglDefault, "aria-label": "Tanggal stockopname" });
       var inpCatatan = el("input", { type: "text", class: "so-inp-edit", placeholder: "Catatan (opsional)", "aria-label": "Catatan" });
       var tombolBuat = el("button", { type: "button", class: "btn btn-utama" }, "+ Buat SO baru");
@@ -1274,7 +1275,7 @@
 
       if (sub === "item" && subObatId) {
         tabSesuaikan.setAttribute("aria-current", "page");
-        renderDetailItem(kontenTab, soId, subObatId);
+        renderDetailItem(kontenTab, soId, subObatId, so.tanggal || "");
       } else if (sub === "hitung") {
         tabHitung.setAttribute("aria-current", "page");
         tahapHitung(kontenTab, soId, lblStatus);
@@ -1780,14 +1781,34 @@
   }
 
   // renderDetailItem: halaman detail per obat di tab Penyesuaian
-  function renderDetailItem(area, soId, obatId) {
+  // soTanggal: "YYYY-MM-DD" akhir bulan SO, dipakai sebagai cutoff mutasi
+  function renderDetailItem(area, soId, obatId, soTanggal) {
     area.textContent = "";
     area.appendChild(el("p", { class: "status-koneksi" }, "Memuat detail..."));
+
+    // Jika soTanggal belum diketahui, ambil dulu dari PocketBase
+    if (!soTanggal) {
+      LPLPO.daftar("stockopname", { filter: 'id = "' + soId + '"', perPage: 1 }).then(function (d) {
+        var so = (d.items && d.items[0]) || {};
+        renderDetailItem(area, soId, obatId, so.tanggal || "9999-12-31");
+      });
+      return;
+    }
+
+    // Hitung akhir bulan dari soTanggal (pakai hari terakhir bulan tsb)
+    var cutoff = (function (tgl) {
+      var d = new Date(tgl);
+      if (isNaN(d)) return tgl;
+      var akhir = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0");
+    })(soTanggal);
+
+    var filterMutasi = 'obat = "' + obatId + '" && status = "confirmed" && tanggal <= "' + cutoff + '"';
 
     Promise.all([
       LPLPO.daftar("daftar_obat", { filter: 'id = "' + obatId + '"', perPage: 1 }),
       daftarSemua("batch", { perPage: 200, filter: 'obat = "' + obatId + '"', sort: "nomor_batch" }),
-      daftarSemua("mutasi", { perPage: 500, filter: 'obat = "' + obatId + '" && status = "confirmed"', sort: "tanggal,id", expand: "unit,batch" }),
+      daftarSemua("mutasi", { perPage: 500, filter: filterMutasi, sort: "tanggal,id", expand: "unit,batch" }),
       ambilItemSO(soId)
     ]).then(function (hasil) {
       var obat = (hasil[0].items && hasil[0].items[0]) || {};
@@ -1815,10 +1836,34 @@
       var tombolKembali = el("a", { href: "#/stockopname/sesuaikan", class: "btn btn-garis so-btn-kembali" }, "← Kembali");
       area.appendChild(tombolKembali);
 
-      // Header item
+      // Hitung selisih total (sistem vs fisik) untuk header
+      var totalSistem = batchObat.reduce(function (acc, bt) { return acc + bt._stok_sistem; }, 0);
+      var totalFisikHeader = batchObat.reduce(function (acc, bt) {
+        var f = fisikDari(bt); return f !== null ? acc + f : acc;
+      }, 0);
+      var adaFisik = batchObat.some(function (bt) { return fisikDari(bt) !== null; });
+      var diffTotal = totalFisikHeader - totalSistem;
+      var diffTotalStr = (diffTotal > 0 ? "+" : "") + diffTotal;
+      var satuan = obat.satuan || "";
+
+      var selisihTotalEl = adaFisik
+        ? el("span", { class: "so-selisih-val " + (diffTotal > 0 ? "lebih" : diffTotal < 0 ? "kurang" : ""), style: "font-size:18px; margin-left:8px" },
+            diffTotalStr + " " + satuan)
+        : el("span", { class: "pudar", style: "font-size:13px; margin-left:8px" }, "belum dihitung");
+
       var headerItem = el("div", { class: "panel so-detail-header" }, [
-        el("h2", { style: "margin:0 0 4px" }, obat.nama_utama || obatId),
-        el("span", { class: "pudar" }, obat.kode || "")
+        el("div", { style: "display:flex; align-items:baseline; flex-wrap:wrap; gap:4px; margin-bottom:4px" }, [
+          el("h2", { style: "margin:0" }, obat.nama_utama || obatId),
+          selisihTotalEl
+        ]),
+        el("div", { class: "pudar", style: "font-size:13px" }, [
+          el("span", {}, obat.kode || ""),
+          el("span", { style: "margin:0 8px" }, "·"),
+          el("span", {}, "Sistem: " + formatAngka(totalSistem)),
+          adaFisik ? el("span", {}, "  Fisik: " + formatAngka(totalFisikHeader)) : el("span", {}),
+          el("span", { style: "margin:0 8px" }, "·"),
+          el("span", {}, "Cutoff: " + cutoff)
+        ])
       ]);
       area.appendChild(headerItem);
 
@@ -1898,13 +1943,14 @@
 
       // Tombol recalc stok_sistem semua batch obat ini
       var indRecalc = el("span", { class: "so-ind", "aria-hidden": "true" });
-      var tombolRecalc = el("button", { type: "button", class: "btn btn-garis", style: "font-size:13px" }, "⟳ Recalc stok sistem");
+      var tombolRecalc = el("button", { type: "button", class: "btn btn-hijau", style: "font-size:13px" }, "⟳ Recalc stok sistem");
       tombolRecalc.addEventListener("click", function () {
         tombolRecalc.disabled = true;
         indRecalc.className = "so-ind so-ind-loading";
 
         var sisaBatch = {};
         batchObat.forEach(function (bt) { sisaBatch[bt.id] = Number(bt.stok_awal) || 0; });
+        // semuaTx sudah difilter sampai cutoff saat fetch
         semuaTx.forEach(function (tx) {
           if (!tx.batch) return;
           var j = Number(tx.jumlah) || 0;
@@ -1936,7 +1982,7 @@
       });
 
       // Tombol Tambah mutasi (popup)
-      var tombolTambahMutasi = el("button", { type: "button", class: "btn btn-utama", style: "font-size:13px" }, "+ Tambah mutasi");
+      var tombolTambahMutasi = el("button", { type: "button", class: "btn btn-hijau-garis", style: "font-size:13px" }, "+ Tambah mutasi");
       tombolTambahMutasi.addEventListener("click", function () {
         bukaPopupTambahMutasi(batchObat, obat, function (pesan) {
           soPesanTerakhir = pesan;
@@ -1944,7 +1990,10 @@
         });
       });
 
-      headerTx.appendChild(el("div", { class: "so-header-aksi" }, [tombolRecalc, indRecalc, tombolGabung, tombolTambahMutasi]));
+      // Kiri: Recalc | Kanan: Gabung batch + Tambah mutasi
+      var grupKiri = el("div", { style: "display:flex;gap:8px;align-items:center" }, [tombolRecalc, indRecalc]);
+      var grupKanan = el("div", { style: "display:flex;gap:8px;align-items:center" }, [tombolGabung, tombolTambahMutasi]);
+      headerTx.appendChild(el("div", { class: "so-header-aksi" }, [grupKiri, grupKanan]));
 
       var pesanTxGlobal = el("p", { class: "pesan", hidden: true });
       seksiTx.appendChild(pesanTxGlobal);
@@ -1987,7 +2036,13 @@
 
       function gambarTabel() {
         var terurut = semuaTx.slice().sort(function (a, c) {
-          return (a.tanggal || "").localeCompare(c.tanggal || "") || (a.id || "").localeCompare(c.id || "");
+          var tglCmp = (a.tanggal || "").localeCompare(c.tanggal || "");
+          if (tglCmp !== 0) return tglCmp;
+          // Hari sama: masuk dulu (urutan saldo tidak minus sementara)
+          var jA = a.jenis === "masuk" ? 0 : 1;
+          var jC = c.jenis === "masuk" ? 0 : 1;
+          if (jA !== jC) return jA - jC;
+          return (a.id || "").localeCompare(c.id || "");
         });
         var sisaArr = hitungSisa(terurut);
         wadahTabel.textContent = "";
@@ -2004,17 +2059,35 @@
         ])]);
         var tbody = el("tbody", {});
 
-        // Baris saldo awal (statis)
-        tbody.appendChild(el("tr", { class: "so-tx-tr-awal" }, [
-          el("td", { "data-label": "Tanggal", class: "pudar" }, "Saldo awal"),
-          el("td", { "data-label": "Dari / Ke" }, ""),
-          el("td", { "data-label": "Batch" }, ""),
-          el("td", { "data-label": "Masuk", class: "n" }, formatAngka(totalStokAwal)),
-          el("td", { "data-label": "Keluar", class: "n" }, ""),
-          el("td", { "data-label": "Sisa batch", class: "n" }, ""),
-          el("td", { "data-label": "Sisa total", class: "n" }, formatAngka(totalStokAwal)),
-          el("td", {}, "")
-        ]));
+        // Baris saldo awal per batch
+        batchObat.forEach(function (bt, bi) {
+          var stokAwalBt = Number(bt.stok_awal) || 0;
+          var labelBt = (bt.nomor_batch || "tanpa batch") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "");
+          // Sisa total kumulatif di baris saldo awal = jumlah stok_awal s.d. batch ini
+          var sisaTotalAwal = batchObat.slice(0, bi + 1).reduce(function (acc, x) { return acc + (Number(x.stok_awal) || 0); }, 0);
+          tbody.appendChild(el("tr", { class: "so-tx-tr-awal" }, [
+            el("td", { "data-label": "Tanggal", class: "pudar" }, bi === 0 ? "Saldo awal" : ""),
+            el("td", { "data-label": "Dari / Ke" }, ""),
+            el("td", { "data-label": "Batch", class: "pudar" }, labelBt),
+            el("td", { "data-label": "Masuk", class: "n" }, formatAngka(stokAwalBt)),
+            el("td", { "data-label": "Keluar", class: "n" }, ""),
+            el("td", { "data-label": "Sisa batch", class: "n" }, formatAngka(stokAwalBt)),
+            el("td", { "data-label": "Sisa total", class: "n" }, formatAngka(sisaTotalAwal)),
+            el("td", {}, "")
+          ]));
+        });
+        // Jika tidak ada batch sama sekali, tampilkan satu baris ringkasan
+        if (!batchObat.length) {
+          tbody.appendChild(el("tr", { class: "so-tx-tr-awal" }, [
+            el("td", { class: "pudar" }, "Saldo awal"),
+            el("td", {}), el("td", {}),
+            el("td", { class: "n" }, formatAngka(totalStokAwal)),
+            el("td", { class: "n" }, ""),
+            el("td", { class: "n" }, ""),
+            el("td", { class: "n" }, formatAngka(totalStokAwal)),
+            el("td", {})
+          ]));
+        }
 
         terurut.forEach(function (tx, idx) {
           var unitNama = (tx.expand && tx.expand.unit && tx.expand.unit.nama) || "-";

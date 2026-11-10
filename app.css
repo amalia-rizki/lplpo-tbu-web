@@ -558,10 +558,34 @@
 .so-status-badge.so-status-draft    { background: color-mix(in srgb, #f59e0b 18%, transparent); color: #b45309; }
 .so-status-badge.so-status-selesai  { background: color-mix(in srgb, #22c55e 15%, transparent); color: #15803d; }
 
-/* SO: header aksi (recalc + gabung + tambah) */
+/* SO: header aksi (recalc kiri | gabung+tambah kanan) */
 .so-header-aksi {
-  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  justify-content: space-between; margin-top: 8px;
 }
+
+/* btn-hijau: Recalc — hijau penuh */
+.btn-hijau {
+  background: var(--aman-teks, #22c55e);
+  color: #fff;
+  border: 1.5px solid var(--aman-teks, #22c55e);
+  border-radius: var(--radius); padding: 0 14px; min-height: 36px;
+  font-size: 14px; font-family: var(--font-form); cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-hijau:hover { opacity: 0.85; }
+.btn-hijau:disabled { opacity: 0.5; cursor: default; }
+
+/* btn-hijau-garis: Tambah mutasi — hijau outline */
+.btn-hijau-garis {
+  background: transparent;
+  color: var(--aman-teks, #22c55e);
+  border: 1.5px solid var(--aman-teks, #22c55e);
+  border-radius: var(--radius); padding: 0 14px; min-height: 36px;
+  font-size: 14px; font-family: var(--font-form); cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-hijau-garis:hover { background: color-mix(in srgb, var(--aman-teks, #22c55e) 12%, transparent); }
 
 /* SO tabel: kolom aksi (pisah + hapus) */
 .so-td-aksi { white-space: nowrap; }
