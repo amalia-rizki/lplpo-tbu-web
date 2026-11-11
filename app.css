@@ -15,8 +15,28 @@
   display: inline-flex; align-items: center; justify-content: center;
 }
 
-/* Header bar HP (hamburger + nama) — tersembunyi di desktop */
-.app-header { display: none; }
+/* Header bar — desktop: hanya tombol toggle nav; HP: hamburger + nama via media query */
+.app-header {
+  display: flex; align-items: center;
+  position: sticky; top: 0; z-index: 20;
+  background: var(--kartu); border-bottom: 1px solid var(--garis);
+  padding: 0 12px; height: 48px; gap: 8px;
+}
+.btn-hamburger { display: none; }   /* tampil lagi di @media HP */
+.header-nama   { display: none; }   /* tampil lagi di @media HP */
+.btn-toggle-nav {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0; margin-left: auto;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--tinta-pudar); border-radius: var(--radius);
+  transition: color 0.15s, background 0.15s;
+}
+.btn-toggle-nav:hover { color: var(--tinta); background: rgba(0,0,0,0.06); }
+.btn-toggle-nav:focus-visible { outline: 3px solid var(--hijau-teks); outline-offset: 2px; }
+
+/* State: panel kiri tersembunyi */
+.app.nav-tersembunyi .menu { display: none; }
+.app.nav-tersembunyi .konten { grid-column: 1 / -1; }
 
 /* Halaman */
 .judul-halaman { display: flex; flex-direction: column; gap: 6px; }
@@ -67,7 +87,8 @@
     color: var(--tinta); border-radius: var(--radius); flex-shrink: 0;
   }
   .btn-hamburger:focus-visible { outline: 3px solid var(--hijau-teks); outline-offset: 2px; }
-  .header-nama { font-size: 18px; font-weight: 800; color: var(--hijau-teks); }
+  .header-nama { font-size: 18px; font-weight: 800; color: var(--hijau-teks); flex: 1; }
+  .btn-toggle-nav { display: none; } /* toggle nav hanya di desktop */
 
   /* Overlay gelap di belakang drawer */
   .drawer-overlay {
@@ -297,6 +318,7 @@
 .cari-obat-item:last-child { border-bottom: none; }
 .cari-obat-item:hover, .cari-obat-item.fokus { background: var(--hijau-muda); }
 .cari-obat-kosong { padding: 10px 12px; font-size: 15px; color: var(--tinta-pudar); }
+.cari-obat-kat { color: var(--tinta-pudar); font-size: 14px; }
 
 /* ---------- Master data: tab, pencarian, daftar ---------- */
 .batas-dalam { display: flex; flex-direction: column; gap: 20px; }
@@ -430,6 +452,21 @@
 .ks-negatif {
   color: var(--bahaya) !important;
   font-weight: 700;
+}
+
+/* Sisa batch kecil/pudar di kolom Sisa Stok kartu stok */
+.ks-sisa-total {
+  display: block;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ks-sisa-batch-sub {
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .ks-td-kosong {

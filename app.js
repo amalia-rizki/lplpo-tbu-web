@@ -269,6 +269,14 @@
     muat();
   }
 
+  // Helper: nama obat + kategori untuk menghindari kebingungan nama duplikat antar kategori
+  function namaObatLabel(obat) {
+    if (!obat) return "?";
+    var kat = obat.expand && obat.expand.kategori;
+    var katStr = kat ? kat.nama || kat.kode : (obat.kategori ? "?" : "");
+    return katStr ? obat.nama_utama + " — " + katStr : (obat.nama_utama || obat.kode || "?");
+  }
+
   // ---------- Autocomplete cari obat ----------
   // onPilih(obat) dipanggil saat user memilih satu item.
   // Mengembalikan elemen wrapper yang bisa langsung dimasukkan ke DOM.
@@ -315,7 +323,12 @@
       }
 
       cocok.forEach(function (o, i) {
-        var item = el("div", { class: "cari-obat-item", role: "option", "data-idx": String(i) }, o.nama_utama);
+        var kat = o.expand && o.expand.kategori;
+        var katStr = kat ? kat.nama || kat.kode : "";
+        var itemIsi = el("span", {});
+        itemIsi.appendChild(document.createTextNode(o.nama_utama || o.kode || "?"));
+        if (katStr) itemIsi.appendChild(el("span", { class: "cari-obat-kat" }, " — " + katStr));
+        var item = el("div", { class: "cari-obat-item", role: "option", "data-idx": String(i) }, [itemIsi]);
         item.addEventListener("mousedown", function (e) {
           e.preventDefault(); // jaga focus tidak pindah dari inp
           inp.value = "";
@@ -471,7 +484,7 @@
 
     // Nama obat + tombol hapus
     var kepala = el("div", { class: "pnr-baris-kepala" }, [
-      el("strong", {}, obat.nama_utama || b.obatId),
+      el("strong", {}, namaObatLabel(obat) || b.obatId),
       el("button", { type: "button", class: "btn btn-bahaya pnr-hapus", "aria-label": "Hapus " + (obat.nama_utama || "") }, "✕")
     ]);
     kepala.querySelector(".pnr-hapus").addEventListener("click", function () {
@@ -882,7 +895,7 @@
     var info = el("span", { class: "pudar", style: "font-size:14px" },
       b.permintaanId ? " (dari permintaan)" : "");
     var kepala = el("div", { class: "pnr-baris-kepala" }, [
-      el("div", {}, [el("strong", {}, obat.nama_utama || b.obatId), info]),
+      el("div", {}, [el("strong", {}, namaObatLabel(obat) || b.obatId), info]),
       el("button", { type: "button", class: "btn btn-bahaya pnr-hapus", "aria-label": "Hapus" }, "✕")
     ]);
     kepala.querySelector(".pnr-hapus").addEventListener("click", function () {
@@ -1174,6 +1187,24 @@
     var d = new Date(tgl);
     if (isNaN(d)) return tgl.slice(0, 7);
     return d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  }
+
+  // Format tanggal pendek untuk tabel: dd-mm-yy (misal "15-10-26")
+  function formatTglPendek(tgl) {
+    if (!tgl) return "—";
+    var s = typeof tgl === "string" ? tgl.slice(0, 10) : "";
+    if (!s || s.length < 10) return tgl ? String(tgl).slice(0, 10) : "—";
+    var parts = s.split("-");
+    if (parts.length !== 3) return s;
+    return parts[2] + "-" + parts[1] + "-" + parts[0].slice(2);
+  }
+
+  // Format tanggal panjang untuk judul/heading: dd mmmm yyyy (misal "15 Oktober 2026")
+  function formatTglPanjang(tgl) {
+    if (!tgl) return "?";
+    var d = new Date(tgl);
+    if (isNaN(d)) return String(tgl).slice(0, 10);
+    return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
   }
 
   function tampilPilihPeriodeSO(area, onPilih) {
@@ -1531,7 +1562,7 @@
         ]);
 
         var tr = el("tr", { class: edBulanIni ? "terpilih" : "" }, [
-          el("td", { class: "utama", "data-label": "" }, obat.nama_utama || "-"),
+          el("td", { class: "utama", "data-label": "" }, namaObatLabel(obat) || "-"),
           tdBatchHitung,
           tdEDHitung,
           el("td", { class: "n", "data-label": "Stok sistem" },
@@ -1862,7 +1893,7 @@
           el("span", {}, "Sistem: " + formatAngka(totalSistem)),
           adaFisik ? el("span", {}, "  Fisik: " + formatAngka(totalFisikHeader)) : el("span", {}),
           el("span", { style: "margin:0 8px" }, "·"),
-          el("span", {}, "Cutoff: " + cutoff)
+          el("span", {}, "Cutoff: " + formatTglPanjang(cutoff))
         ])
       ]);
       area.appendChild(headerItem);
@@ -2060,11 +2091,13 @@
         var tbody = el("tbody", {});
 
         // Baris saldo awal per batch
-        batchObat.forEach(function (bt, bi) {
+        // Hanya tampilkan baris saldo awal yang ada jumlahnya (stok_awal > 0)
+        var batchAwalAda = batchObat.filter(function (bt) { return (Number(bt.stok_awal) || 0) > 0; });
+        var sisaTotalAwalKumulatif = 0;
+        batchAwalAda.forEach(function (bt, bi) {
           var stokAwalBt = Number(bt.stok_awal) || 0;
           var labelBt = (bt.nomor_batch || "tanpa batch") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : "");
-          // Sisa total kumulatif di baris saldo awal = jumlah stok_awal s.d. batch ini
-          var sisaTotalAwal = batchObat.slice(0, bi + 1).reduce(function (acc, x) { return acc + (Number(x.stok_awal) || 0); }, 0);
+          sisaTotalAwalKumulatif += stokAwalBt;
           tbody.appendChild(el("tr", { class: "so-tx-tr-awal" }, [
             el("td", { "data-label": "Tanggal", class: "pudar" }, bi === 0 ? "Saldo awal" : ""),
             el("td", { "data-label": "Dari / Ke" }, ""),
@@ -2072,7 +2105,7 @@
             el("td", { "data-label": "Masuk", class: "n" }, formatAngka(stokAwalBt)),
             el("td", { "data-label": "Keluar", class: "n" }, ""),
             el("td", { "data-label": "Sisa batch", class: "n" }, formatAngka(stokAwalBt)),
-            el("td", { "data-label": "Sisa total", class: "n" }, formatAngka(sisaTotalAwal)),
+            el("td", { "data-label": "Sisa total", class: "n" }, formatAngka(sisaTotalAwalKumulatif)),
             el("td", {}, "")
           ]));
         });
@@ -2098,7 +2131,7 @@
 
           // Tanggal editable
           var tdTgl = el("td", { "data-label": "Tanggal", class: "so-td-edit" });
-          var spanTgl = el("span", {}, tx.tanggal ? tx.tanggal.slice(0, 10) : "—");
+          var spanTgl = el("span", {}, formatTglPendek(tx.tanggal));
           var inpTgl = el("input", { type: "date", class: "so-inp-tabel", value: tx.tanggal ? tx.tanggal.slice(0, 10) : "", hidden: true });
           var indTgl = el("span", { class: "so-ind", "aria-hidden": "true" });
           tdTgl.appendChild(spanTgl); tdTgl.appendChild(inpTgl); tdTgl.appendChild(indTgl);
@@ -2107,7 +2140,7 @@
             if (!inpTgl.value || inpTgl.value === (tx.tanggal ? tx.tanggal.slice(0, 10) : "")) { spanTgl.hidden = false; inpTgl.hidden = true; return; }
             indTgl.className = "so-ind so-ind-loading";
             LPLPO.ubah("mutasi", tx.id, { tanggal: inpTgl.value }).then(function () {
-              tx.tanggal = inpTgl.value; spanTgl.textContent = inpTgl.value;
+              tx.tanggal = inpTgl.value; spanTgl.textContent = formatTglPendek(inpTgl.value);
               spanTgl.hidden = false; inpTgl.hidden = true; indTgl.className = "so-ind so-ind-ok";
               gambarTabel();
             }, function () { indTgl.className = "so-ind so-ind-err"; spanTgl.hidden = false; inpTgl.hidden = true; });
@@ -2185,7 +2218,7 @@
 
           var tombolH = el("button", { type: "button", class: "btn btn-bahaya so-btn-hapus-tx", title: "Hapus", "aria-label": "Hapus" }, "✕");
           tombolH.addEventListener("click", function () {
-            var label = (tx.tanggal ? tx.tanggal.slice(0, 10) : "") + " · " + (tx.jenis === "masuk" ? "Masuk" : "Keluar") + " " + jumlah + " · " + unitNama;
+            var label = formatTglPendek(tx.tanggal) + " · " + (tx.jenis === "masuk" ? "Masuk" : "Keluar") + " " + jumlah + " · " + unitNama;
             if (!window.confirm("Hapus mutasi ini?\n" + label + "\n\nTidak bisa dibatalkan.")) return;
             tombolH.disabled = true;
             hapusRecord("mutasi", tx.id).then(function () {
@@ -2691,7 +2724,10 @@
           el("span", { class: "ks-ringkas-label" }, "Obat"),
           el("span", { class: "ks-ringkas-nilai" }, [
             el("strong", {}, obat.nama_utama),
-            el("span", { class: "pudar" }, obat.kode ? " · " + obat.kode : "")
+            el("span", { class: "pudar" }, [
+              obat.kode ? " · " + obat.kode : "",
+              (obat.expand && obat.expand.kategori) ? " · " + (obat.expand.kategori.nama || obat.expand.kategori.kode) : ""
+            ].filter(Boolean).join("") || "")
           ])
         ]),
         el("div", { class: "ks-ringkas-item" }, [
@@ -2724,15 +2760,47 @@
         }
         tampil.forEach(function (b) {
           tBody.appendChild(el("tr", { class: "ks-tr-" + b.jenis }, [
-            el("td", { "data-label": "Tanggal" }, b.tanggal ? b.tanggal.slice(0, 10) : "—"),
+            el("td", { "data-label": "Tanggal" }, formatTglPendek(b.tanggal)),
             el("td", { "data-label": "Dokumen" }, ""),
             el("td", { "data-label": "Dari / Ke" }, b.unit_nama),
             el("td", { "data-label": "Batch", class: "pudar" }, b.nomor_batch),
             el("td", { "data-label": "Kadaluwarsa", class: "pudar" }, b.expired_date ? formatED(b.expired_date) : "—"),
             el("td", { "data-label": "Masuk", class: "n ks-masuk" }, b.masuk != null ? formatAngka(b.masuk) : ""),
             el("td", { "data-label": "Keluar", class: "n ks-keluar" }, b.keluar != null ? formatAngka(b.keluar) : ""),
-            el("td", { "data-label": "Sisa Stok", class: "n" + (b.sisa < 0 ? " ks-negatif" : "") },
-              formatAngka(b.sisa))
+            el("td", { "data-label": "Sisa Stok", class: "n" + (b.sisa < 0 ? " ks-negatif" : "") }, (function() {
+              // Sisa total (besar) + sisa batch aktif (kecil, pudar)
+              var sisaBatchArr = batchAktif.filter(function(bt) {
+                // Hitung sisa batch ini dari baris sampai sini
+                return bt.nomor_batch === b.nomor_batch || (!bt.nomor_batch && b.nomor_batch === "—");
+              });
+              var fragEl = document.createDocumentFragment();
+              var totalEl = el("span", { class: "ks-sisa-total" }, formatAngka(b.sisa));
+              fragEl.appendChild(totalEl);
+              // Tampilkan sisa per batch aktif, kecil dan pudar
+              if (batchAktif.length > 1) {
+                var subEl = el("span", { class: "ks-sisa-batch-sub pudar" });
+                // Hitung sisa running per batch sampai baris ini
+                var sisaRunBatch = {};
+                var allRows = baris.slice(0, baris.indexOf(b) + 1);
+                // Init dengan stok awal
+                batchList.forEach(function(bt) { sisaRunBatch[bt.id] = Number(bt.stok_awal) || 0; });
+                // Update dengan mutasi sampai baris ini
+                items.slice(0, baris.indexOf(b) + 1).forEach(function(m) {
+                  if (!m.batch) return;
+                  var j = Number(m.jumlah) || 0;
+                  if (m.jenis === "masuk") sisaRunBatch[m.batch] = (sisaRunBatch[m.batch] || 0) + j;
+                  else sisaRunBatch[m.batch] = (sisaRunBatch[m.batch] || 0) - j;
+                });
+                batchAktif.forEach(function(bt, i) {
+                  var s = sisaRunBatch[bt.id];
+                  if (s == null) return;
+                  if (i > 0) subEl.appendChild(document.createTextNode(" · "));
+                  subEl.appendChild(el("span", {}, (bt.nomor_batch || "—") + ": " + formatAngka(s)));
+                });
+                fragEl.appendChild(subEl);
+              }
+              return fragEl;
+            })())
           ]));
         });
       }
@@ -2876,6 +2944,18 @@
   bukaTombol.addEventListener("click", bukaDrawer);
   tutupTombol.addEventListener("click", tutupDrawer);
   overlay.addEventListener("click", tutupDrawer);
+
+  // ---------- Toggle panel kiri (desktop) ----------
+  var toggleNavTombol = document.getElementById("toggle-nav");
+  var appEl = document.querySelector(".app");
+  var KUNCI_PANEL = "lplpo_nav_tersembunyi";
+  if (localStorage.getItem(KUNCI_PANEL) === "1") appEl.classList.add("nav-tersembunyi");
+  if (toggleNavTombol) {
+    toggleNavTombol.addEventListener("click", function () {
+      var tersembunyi = appEl.classList.toggle("nav-tersembunyi");
+      try { localStorage.setItem(KUNCI_PANEL, tersembunyi ? "1" : "0"); } catch(e) {}
+    });
+  }
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && menuNav.classList.contains("terbuka")) tutupDrawer();
