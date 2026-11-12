@@ -2615,7 +2615,8 @@
 
     LPLPO.daftar("daftar_obat", {
       perPage: 500, sort: "kode",
-      filter: "aktif = true"
+      filter: "aktif = true",
+      expand: "kategori"
     }).then(function (d) {
       area.textContent = "";
 
@@ -2749,6 +2750,40 @@
 
       function gambarBaris() {
         tBody.textContent = "";
+
+        // Baris saldo awal per batch (hanya yang ada jumlahnya), selalu tampil di atas
+        var batchAwal = batchList.filter(function (bt) { return (Number(bt.stok_awal) || 0) > 0; })
+          .sort(function (a, c) { return (a.expired_date || "9999").localeCompare(c.expired_date || "9999"); });
+        if (batchAwal.length) {
+          var sisaAwalKum = 0;
+          batchAwal.forEach(function (bt, bi) {
+            var stokAwalBt = Number(bt.stok_awal) || 0;
+            sisaAwalKum += stokAwalBt;
+            tBody.appendChild(el("tr", { class: "ks-tr-awal" }, [
+              el("td", { "data-label": "Tanggal", class: "pudar" }, bi === 0 ? "Saldo awal" : ""),
+              el("td", { "data-label": "Dokumen" }, ""),
+              el("td", { "data-label": "Dari / Ke", class: "pudar" }, ""),
+              el("td", { "data-label": "Batch", class: "pudar" }, bt.nomor_batch || "—"),
+              el("td", { "data-label": "Kadaluwarsa", class: "pudar" }, bt.expired_date ? formatED(bt.expired_date) : "—"),
+              el("td", { "data-label": "Masuk", class: "n ks-masuk" }, formatAngka(stokAwalBt)),
+              el("td", { "data-label": "Keluar", class: "n" }, ""),
+              el("td", { "data-label": "Sisa Stok", class: "n" }, formatAngka(sisaAwalKum))
+            ]));
+          });
+        } else if (!batchList.length) {
+          // Obat tanpa batch — satu baris stok awal total jika ada
+          var totalAwal = batchList.reduce(function (a, bt) { return a + (Number(bt.stok_awal) || 0); }, 0);
+          if (totalAwal > 0) {
+            tBody.appendChild(el("tr", { class: "ks-tr-awal" }, [
+              el("td", { "data-label": "Tanggal", class: "pudar" }, "Saldo awal"),
+              el("td", {}), el("td", {}), el("td", {}), el("td", {}),
+              el("td", { "data-label": "Masuk", class: "n ks-masuk" }, formatAngka(totalAwal)),
+              el("td", {}),
+              el("td", { "data-label": "Sisa Stok", class: "n" }, formatAngka(totalAwal))
+            ]));
+          }
+        }
+
         var tampil = filterAktif === "semua" ? baris
           : baris.filter(function (b) { return b.jenis === filterAktif; });
 

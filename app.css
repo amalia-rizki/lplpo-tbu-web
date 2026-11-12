@@ -454,6 +454,10 @@
   font-weight: 700;
 }
 
+/* Baris saldo awal kartu stok — sama dengan SO */
+.ks-tr-awal td { color: var(--tinta-pudar); font-style: italic; }
+.ks-tr-awal td.n { font-style: normal; }
+
 /* Sisa batch kecil/pudar di kolom Sisa Stok kartu stok */
 .ks-sisa-total {
   display: block;
