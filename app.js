@@ -269,6 +269,79 @@
     muat();
   }
 
+  // ---------- Input tanggal dd/mm/yyyy (tiga field, navigasi otomatis) ----------
+  // Mengembalikan { el: wrapperElement, getValue: fn→"YYYY-MM-DD", setValue: fn(str) }
+  // onChange(isoString) dipanggil setiap kali nilai berubah lengkap.
+  function buatInputTanggal(nilaiAwal, onChange, opts) {
+    opts = opts || {};
+    var wrap = el("div", { class: "tgl-wrap" + (opts.kelas ? " " + opts.kelas : ""), "aria-label": opts.label || "Tanggal" });
+
+    var iDD = el("input", { type: "text", class: "tgl-dd", maxlength: "2", inputmode: "numeric",
+      placeholder: "dd", "aria-label": "Tanggal", size: "2", autocomplete: "off" });
+    var iMM = el("input", { type: "text", class: "tgl-mm", maxlength: "2", inputmode: "numeric",
+      placeholder: "mm", "aria-label": "Bulan", size: "2", autocomplete: "off" });
+    var iYY = el("input", { type: "text", class: "tgl-yy", maxlength: "4", inputmode: "numeric",
+      placeholder: "yyyy", "aria-label": "Tahun", size: "4", autocomplete: "off" });
+
+    wrap.appendChild(iDD);
+    wrap.appendChild(el("span", { class: "tgl-sep", "aria-hidden": "true" }, "/"));
+    wrap.appendChild(iMM);
+    wrap.appendChild(el("span", { class: "tgl-sep", "aria-hidden": "true" }, "/"));
+    wrap.appendChild(iYY);
+
+    // Isi nilai awal
+    function setValue(iso) {
+      if (!iso) return;
+      var s = String(iso).slice(0, 10);
+      var parts = s.split("-");
+      if (parts.length === 3) {
+        iDD.value = parts[2];
+        iMM.value = parts[1];
+        iYY.value = parts[0];
+      }
+    }
+    setValue(nilaiAwal);
+
+    // Ambil nilai ISO
+    function getValue() {
+      var d = iDD.value.trim(), m = iMM.value.trim(), y = iYY.value.trim();
+      if (!d || !m || !y || y.length < 4) return "";
+      return y + "-" + m.padStart(2,"0") + "-" + d.padStart(2,"0");
+    }
+
+    function emit() { if (onChange) onChange(getValue()); }
+
+    function hanyaAngka(e) {
+      // Izinkan: angka, Backspace, Delete, Tab, arrow
+      if (!/^\d$/.test(e.key) && !["Backspace","Delete","Tab","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+      }
+    }
+
+    function buatHandler(inp, maks, berikut) {
+      inp.addEventListener("keydown", function (e) {
+        hanyaAngka(e);
+        if (e.key === "Backspace" && inp.value === "" && inp.previousElementSibling && inp.previousElementSibling.previousElementSibling) {
+          // mundur ke field sebelumnya (lewati span pemisah)
+        }
+      });
+      inp.addEventListener("input", function () {
+        // Hanya angka
+        inp.value = inp.value.replace(/\D/g, "").slice(0, maks);
+        // Auto-maju
+        if (inp.value.length === maks && berikut) { berikut.focus(); berikut.select(); }
+        emit();
+      });
+      inp.addEventListener("focus", function () { inp.select(); });
+    }
+
+    buatHandler(iDD, 2, iMM);
+    buatHandler(iMM, 2, iYY);
+    buatHandler(iYY, 4, null);
+
+    return { el: wrap, getValue: getValue, setValue: setValue };
+  }
+
   // Helper: nama obat + kategori untuk menghindari kebingungan nama duplikat antar kategori
   function namaObatLabel(obat) {
     if (!obat) return "?";
@@ -412,9 +485,9 @@
           return el("option", { value: u.id, selected: u.id === state.unitId ? "selected" : undefined }, u.nama);
         }))
       );
-      var inpTgl = el("input", { type: "date", class: "pnr-tgl", id: "pnr-tgl", value: state.tanggal });
+      var tglObj = buatInputTanggal(state.tanggal, function (iso) { state.tanggal = iso; }, { kelas: "pnr-tgl", label: "Tanggal penerimaan" });
+      var inpTgl = tglObj.el;
       pilUnit.addEventListener("change", function () { state.unitId = pilUnit.value; });
-      inpTgl.addEventListener("change", function () { state.tanggal = inpTgl.value; });
 
       var formHeader = el("div", { class: "panel pnr-header" }, [
         el("div", { class: "baris-isian" }, [
@@ -764,9 +837,9 @@
         [el("option", { value: "" }, "— Pilih unit tujuan —")]
         .concat(unitList.map(function (u) { return el("option", { value: u.id }, u.nama); }))
       );
-      var inpTgl = el("input", { type: "date", class: "pnr-tgl", id: "pgl-tgl", value: state.tanggal });
+      var tglObj = buatInputTanggal(state.tanggal, function (iso) { state.tanggal = iso; }, { kelas: "pnr-tgl", label: "Tanggal pengeluaran" });
+      var inpTgl = tglObj.el;
       pilUnit.addEventListener("change", function () { state.unitId = pilUnit.value; });
-      inpTgl.addEventListener("change", function () { state.tanggal = inpTgl.value; });
 
       var formHeader = el("div", { class: "panel pnr-header", id: "pgl-form-header" }, [
         el("div", { class: "baris-isian" }, [
@@ -842,9 +915,9 @@
         return el("option", { value: u.id }, u.nama);
       }))
     );
-    var inpTgl = el("input", { type: "date", class: "pnr-tgl", id: "pgl-tgl", value: state.tanggal });
+    var tglObj = buatInputTanggal(state.tanggal, function (iso) { state.tanggal = iso; }, { kelas: "pnr-tgl", label: "Tanggal pengeluaran" });
+    var inpTgl = tglObj.el;
     pilUnit.addEventListener("change", function () { state.unitId = pilUnit.value; });
-    inpTgl.addEventListener("change", function () { state.tanggal = inpTgl.value; });
 
     var formHeader2 = el("div", { class: "panel pnr-header", id: "pgl-form-header" }, [
       el("div", { class: "baris-isian" }, [
@@ -1241,19 +1314,21 @@
       var now = new Date();
       var akhirBulan = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       var tglDefault = akhirBulan.getFullYear() + "-" + String(akhirBulan.getMonth() + 1).padStart(2, "0") + "-" + String(akhirBulan.getDate()).padStart(2, "0");
-      var inpTgl = el("input", { type: "date", class: "so-inp-edit", value: tglDefault, "aria-label": "Tanggal stockopname" });
+      var tglSOObj = buatInputTanggal(tglDefault, function(){}, { kelas: "so-inp-edit", label: "Tanggal stockopname" });
+      var inpTgl = tglSOObj.el;
       var inpCatatan = el("input", { type: "text", class: "so-inp-edit", placeholder: "Catatan (opsional)", "aria-label": "Catatan" });
       var tombolBuat = el("button", { type: "button", class: "btn btn-utama" }, "+ Buat SO baru");
       var pesanBuat = el("p", { class: "pesan", hidden: true });
 
       tombolBuat.addEventListener("click", function () {
-        if (!inpTgl.value) {
-          pesanBuat.textContent = "Pilih tanggal SO.";
+        var tglVal = tglSOObj.getValue();
+        if (!tglVal) {
+          pesanBuat.textContent = "Pilih tanggal SO (format: dd/mm/yyyy).";
           pesanBuat.className = "pesan galat"; pesanBuat.hidden = false; return;
         }
         tombolBuat.disabled = true; tombolBuat.textContent = "Membuat...";
         LPLPO.buat("stockopname", {
-          tanggal: inpTgl.value,
+          tanggal: tglVal,
           status: "draft",
           catatan: inpCatatan.value || ""
         }).then(function (so) {
@@ -2349,7 +2424,8 @@
     var inpTambahJumlah = el("input", { type: "number", min: "1", step: "1", class: "so-inp-edit", placeholder: "Jumlah", inputmode: "numeric", "aria-label": "Jumlah" });
     var skrg = new Date();
     var tglHari = skrg.getFullYear() + "-" + String(skrg.getMonth() + 1).padStart(2, "0") + "-" + String(skrg.getDate()).padStart(2, "0");
-    var inpTambahTanggal = el("input", { type: "date", class: "so-inp-edit", value: tglHari, "aria-label": "Tanggal mutasi" });
+    var tglTambahObj = buatInputTanggal(tglHari, function(){}, { kelas: "so-inp-edit", label: "Tanggal mutasi" });
+    var inpTambahTanggal = tglTambahObj.el;
     var pilBatchTambah = el("select", { class: "so-pilih-mutasi", "aria-label": "Batch" },
       [el("option", { value: "" }, "— tanpa relasi batch —")].concat(batchObat.map(function (bt) {
         return el("option", { value: bt.id }, (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " (ED " + formatED(bt.expired_date) + ")" : ""));
@@ -2387,7 +2463,7 @@
     tombolTambah.addEventListener("click", function () {
       var unitId = pilUnit.value;
       var jumlah = Number(inpTambahJumlah.value);
-      var tanggal = inpTambahTanggal.value || tglHari;
+      var tanggal = tglTambahObj.getValue() || tglHari;
       var jenis = jenisDipilih();
       if (!unitId || !jenis || !jumlah || jumlah < 1) {
         pesanTambah.textContent = "Pilih unit dan isi jumlah.";
@@ -2576,7 +2652,7 @@
     tombolTambah.addEventListener("click", function () {
       var unitId = pilUnit.value;
       var jumlah = Number(inpTambahJumlah.value);
-      var tanggal = inpTambahTanggal.value || tglHari;
+      var tanggal = tglTambahObj.getValue() || tglHari;
       var jenis = jenisDipilih();
       if (!unitId || !jenis || !jumlah || jumlah < 1) {
         pesanTambah.textContent = "Pilih unit dan isi jumlah.";

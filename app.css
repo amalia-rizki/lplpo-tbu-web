@@ -454,6 +454,26 @@
   font-weight: 700;
 }
 
+/* ---------- Input tanggal dd/mm/yyyy ---------- */
+.tgl-wrap {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: var(--bg-isian); border: 1.5px solid var(--garis-isian);
+  border-radius: var(--radius); padding: 0 10px; height: var(--sentuh);
+  font-family: var(--font-form); font-size: 16px;
+}
+.tgl-wrap:focus-within { outline: 3px solid var(--hijau-teks); outline-offset: 1px; }
+.tgl-wrap.pnr-tgl { flex: 1 1 160px; max-width: 200px; }
+.tgl-dd, .tgl-mm, .tgl-yy {
+  border: none; background: transparent; padding: 0; margin: 0;
+  font-family: var(--font-form); font-size: 16px; color: var(--tinta);
+  text-align: center; outline: none; min-width: 0;
+}
+.tgl-dd { width: 2ch; }
+.tgl-mm { width: 2ch; }
+.tgl-yy { width: 4ch; }
+.tgl-dd::placeholder, .tgl-mm::placeholder, .tgl-yy::placeholder { color: var(--tinta-pudar); }
+.tgl-sep { color: var(--tinta-pudar); user-select: none; font-size: 14px; }
+
 /* Baris saldo awal kartu stok — sama dengan SO */
 .ks-tr-awal td { color: var(--tinta-pudar); font-style: italic; }
 .ks-tr-awal td.n { font-style: normal; }
