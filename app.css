@@ -133,31 +133,22 @@
 }
 
 /* ---------- Penerimaan / Pengeluaran ---------- */
-/* Form header: unit (lebih lebar) + tanggal (lebih sempit) di satu baris */
+/* Form header: satu baris, unit (2fr) + tanggal (auto) */
 .pnr-header .baris-isian {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  align-items: end;
+  align-items: flex-end;
 }
-@media (max-width: 540px) {
-  .pnr-header .baris-isian { grid-template-columns: 1fr; }
-}
+.pnr-header .baris-isian .field:first-child { flex: 2 1 180px; }
+.pnr-header .baris-isian .field:last-child  { flex: 0 0 auto; }
 .pnr-select {
   height: var(--sentuh); padding: 0 12px; width: 100%;
   border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
   background: var(--kartu); color: var(--tinta); font-size: 17px; font-family: var(--font-form);
 }
-/* tgl-wrap di header form — override default sizing */
-.pnr-tgl {
-  width: 100%;
-  height: var(--sentuh);
-  padding: 0 12px;
-  border: 1.5px solid var(--garis-isian);
-  border-radius: var(--radius);
-  background: var(--kartu);
-  font-size: 16px;
-}
+/* tgl-wrap di header form — hanya pastikan tidak inline-flex yg terlalu sempit */
+.pnr-tgl { display: flex; }
 .pnr-tambah-baris { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .pnr-pilih-obat { flex: 1 1 220px; }
 
@@ -699,54 +690,93 @@
 .btn-sekunder:hover { background: color-mix(in srgb, var(--aksen, #3b82f6) 22%, transparent); }
 
 /* ---------- Halaman Histori mutasi ---------- */
-.hist-area { display: flex; flex-direction: column; gap: 16px; }
+.hist-area { display: flex; flex-direction: column; gap: 12px; }
 
-/* Bar filter */
-.hist-filter {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  padding: 12px 16px; background: var(--kartu); border-radius: var(--radius);
-  border: 1px solid var(--garis);
+/* Toolbar */
+.hist-toolbar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px;
+  padding: 10px 14px; background: var(--kartu);
+  border-radius: var(--radius); border: 1px solid var(--garis);
 }
-.hist-filter-label { font-size: 13px; white-space: nowrap; }
-.hist-sel-unit, .hist-sel-jenis {
+.hist-toolbar-label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--tinta-pudar); }
+.hist-toolbar-sep { flex: 1 1 0; }
+.hist-sel-unit, .hist-sel-jenis, .hist-inp-bulan {
   height: 34px; padding: 0 8px; font-size: 14px; font-family: var(--font-form);
   border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
   background: var(--kartu); color: var(--tinta);
 }
-.hist-sel-unit { flex: 1 1 160px; min-width: 120px; }
-.hist-sel-jenis { flex: 0 0 120px; }
+.hist-sel-unit { min-width: 140px; }
+.hist-sel-jenis { min-width: 90px; }
+.hist-inp-bulan { min-width: 130px; }
+.hist-btn-mode { font-size: 13px; min-height: 34px; padding: 0 12px; }
 
-/* Konten daftar kegiatan */
-.hist-konten { display: flex; flex-direction: column; gap: 12px; }
+/* Konten */
+.hist-konten { }
 
-/* Kartu kegiatan */
-.hist-kartu { overflow: hidden; }
-.hist-kartu-kepala {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+/* ---- Mode LIST ---- */
+.hist-list { border: 1px solid var(--garis); border-radius: var(--radius); overflow: hidden; }
+
+/* Baris tanggal — level 1 */
+.hist-baris-tgl {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 14px; border: none; border-bottom: 1px solid var(--garis);
+  background: var(--kertas); color: var(--tinta);
+  text-align: left; cursor: pointer; font-family: var(--font-ui, inherit);
+  transition: background 0.1s;
 }
-.hist-kartu-info { display: flex; flex-direction: column; gap: 2px; }
-.hist-tanggal { font-weight: 600; font-size: 15px; }
-.hist-unit { font-size: 13px; color: var(--tinta-pudar); }
-.hist-kartu-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.hist-ringkasan { font-size: 13px; font-family: var(--font-form); }
+.hist-baris-tgl:last-of-type { border-bottom: none; }
+.hist-baris-tgl:hover { background: var(--kartu); }
+.hist-ikon-expand { font-size: 12px; color: var(--tinta-pudar); flex-shrink: 0; width: 14px; }
+.hist-tgl-label { font-weight: 600; font-size: 14px; flex: 1 1 auto; }
+.hist-hari-ringkasan { font-size: 12px; white-space: nowrap; }
+
+/* Konten per tanggal (level 2) */
+.hist-konten-tgl {
+  border-bottom: 1px solid var(--garis);
+  background: var(--kertas);
+}
+.hist-konten-tgl:last-child { border-bottom: none; }
+.hist-collapsed { display: none; }
+
+/* Baris unit — level 2 */
+.hist-baris-unit {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 14px 8px 28px; border: none; border-bottom: 1px solid var(--garis);
+  background: transparent; color: var(--tinta);
+  text-align: left; cursor: pointer; font-family: var(--font-ui, inherit);
+  transition: background 0.1s;
+}
+.hist-baris-unit:last-of-type { border-bottom: none; }
+.hist-baris-unit:hover { background: color-mix(in srgb, var(--aksen, #3b82f6) 6%, transparent); }
+.hist-unit-nama { font-size: 14px; flex: 1 1 auto; }
+.hist-unit-ringkasan { font-size: 12px; }
+
+/* Konten per unit (level 3) — tabel item */
+.hist-konten-unit {
+  padding: 0 14px 10px 28px;
+  border-bottom: 1px solid var(--garis);
+  background: color-mix(in srgb, var(--kartu) 60%, transparent);
+}
+.hist-konten-unit:last-child { border-bottom: none; }
 
 /* Badge jenis */
 .hist-badge {
-  font-size: 11px; font-family: var(--font-form); padding: 2px 8px;
-  border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
+  font-size: 11px; font-family: var(--font-form); padding: 2px 7px;
+  border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; flex-shrink: 0;
 }
 .hist-badge-masuk  { background: color-mix(in srgb, var(--aksen, #3b82f6) 15%, transparent); color: var(--aksen, #3b82f6); }
 .hist-badge-keluar { background: color-mix(in srgb, #f59e0b 15%, transparent); color: #b45309; }
 
-/* Angka mutasi di tabel */
-.hist-masuk  { color: var(--aman-teks, #22c55e); font-weight: 600; font-family: var(--font-form); }
-.hist-keluar { color: var(--bahaya, #ef4444); font-weight: 600; font-family: var(--font-form); }
-
-/* Tabel item dalam kartu */
-.hist-tabel { margin-top: 4px; }
+/* Tabel dalam mode list dan mode tabel penuh */
+.hist-tabel { width: 100%; margin-top: 4px; font-size: 13px; }
+.hist-td-tgl { white-space: nowrap; }
 .hist-td-aksi { width: 60px; text-align: right; }
 .hist-btn-hapus {
-  font-size: 12px; padding: 2px 8px; min-height: 28px;
+  font-size: 11px; padding: 1px 7px; min-height: 24px;
   color: var(--bahaya, #ef4444); border-color: var(--bahaya, #ef4444);
 }
+.hist-tabel-wrap { overflow-x: auto; }
+
+/* Angka mutasi */
+.hist-masuk  { color: var(--aman-teks, #22c55e); font-weight: 600; font-family: var(--font-form); }
+.hist-keluar { color: var(--bahaya, #ef4444); font-weight: 600; font-family: var(--font-form); }

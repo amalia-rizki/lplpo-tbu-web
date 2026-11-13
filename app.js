@@ -3043,183 +3043,233 @@
   }
 
   // ---------- Halaman: Histori mutasi ----------
-  // #/histori             → semua mutasi, grouped by tanggal+unit
-  // #/histori?unit=X&tgl=Y  → langsung filter unit & tanggal (dari redirect setelah simpan)
+  // Mode LIST: list tanggal expandable → per unit expandable → tabel item
+  // Mode TABEL: satu tabel besar semua mutasi (Excel-like), bisa difilter
+  // #/histori?unit=X&tgl=Y → auto-expand tanggal+unit yg sesuai
   function renderHistori() {
     isi.textContent = "";
-    isi.appendChild(judul("Histori mutasi", "Riwayat semua transaksi. Filter by tanggal dan unit."));
+    isi.appendChild(judul("Histori mutasi", "Riwayat transaksi. Klik tanggal untuk lihat detail."));
 
-    // Baca query dari hash URL: #/histori?unit=X&tgl=Y
+    // Baca query dari hash URL
     var hashQ = (location.hash || "").split("?")[1] || "";
     var qp = {};
     hashQ.split("&").forEach(function (kv) {
       var p = kv.split("="); if (p[0]) qp[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || "");
     });
 
-    // Form filter
     var area = el("div", { class: "hist-area" });
+    isi.appendChild(area);
 
-    // Filter tanggal
-    var today = new Date();
-    var defaultTgl = qp.tgl || [today.getFullYear(), String(today.getMonth()+1).padStart(2,"0"), String(today.getDate()).padStart(2,"0")].join("-");
-    var tglObj = buatInputTanggal(defaultTgl, function(){}, { label: "Tanggal" });
-
-    // Filter unit
+    // ---- Toolbar: filter + toggle mode ----
     var pilUnit = el("select", { class: "hist-sel-unit", "aria-label": "Filter unit" });
     pilUnit.appendChild(el("option", { value: "" }, "Semua unit"));
-    LPLPO.daftar("unit", { perPage: 100, sort: "nama", filter: "aktif = true" }).then(function (d) {
-      d.items.forEach(function (u) {
-        var opt = el("option", { value: u.id }, u.nama);
-        pilUnit.appendChild(opt);
-      });
+    LPLPO.daftar("unit", { perPage: 100, sort: "nama" }).then(function (d) {
+      d.items.forEach(function (u) { pilUnit.appendChild(el("option", { value: u.id }, u.nama)); });
       if (qp.unit) pilUnit.value = qp.unit;
     });
 
-    // Filter jenis
     var pilJenis = el("select", { class: "hist-sel-jenis", "aria-label": "Filter jenis" });
-    [["", "Semua jenis"], ["masuk", "Masuk"], ["keluar", "Keluar"]].forEach(function (j) {
+    [["", "Semua"], ["masuk", "Masuk"], ["keluar", "Keluar"]].forEach(function (j) {
       pilJenis.appendChild(el("option", { value: j[0] }, j[1]));
     });
 
-    var tombolFilter = el("button", { type: "button", class: "btn btn-sekunder" }, "Tampilkan");
-    var tombolBersihkan = el("button", { type: "button", class: "btn btn-teks" }, "Reset filter");
+    // Bulan: default bulan ini
+    var today = new Date();
+    var inpBulan = el("input", { type: "month", class: "hist-inp-bulan",
+      value: today.getFullYear() + "-" + String(today.getMonth()+1).padStart(2,"0") });
 
-    var filterBaris = el("div", { class: "hist-filter" }, [
-      el("span", { class: "hist-filter-label pudar" }, "Tanggal:"),
-      tglObj.el,
-      el("span", { class: "hist-filter-label pudar" }, "Unit:"),
-      pilUnit,
-      el("span", { class: "hist-filter-label pudar" }, "Jenis:"),
-      pilJenis,
-      tombolFilter,
-      tombolBersihkan
+    var modeSaatIni = "list"; // "list" | "tabel"
+    var tombolMode = el("button", { type: "button", class: "btn btn-garis hist-btn-mode" }, "☰ Tabel penuh");
+
+    var tombolMuat = el("button", { type: "button", class: "btn btn-sekunder" }, "Tampilkan");
+
+    var toolbar = el("div", { class: "hist-toolbar" }, [
+      el("label", { class: "hist-toolbar-label" }, [el("span", { class: "pudar" }, "Bulan"), inpBulan]),
+      el("label", { class: "hist-toolbar-label" }, [el("span", { class: "pudar" }, "Unit"), pilUnit]),
+      el("label", { class: "hist-toolbar-label" }, [el("span", { class: "pudar" }, "Jenis"), pilJenis]),
+      tombolMuat,
+      el("span", { class: "hist-toolbar-sep" }),
+      tombolMode
     ]);
-    area.appendChild(filterBaris);
+    area.appendChild(toolbar);
 
     var konten = el("div", { class: "hist-konten" });
     area.appendChild(konten);
-    isi.appendChild(area);
 
+    // ---- Render tabel item (dipakai di kedua mode) ----
+    function buatTabelItem(items, unitMap) {
+      var tbody = el("tbody");
+      items.forEach(function (m) {
+        var obatE = m.expand && m.expand.daftar_obat;
+        var batchE = m.expand && m.expand.batch;
+        var unitE = unitMap[m.unit] || {};
+        var btnHapus = el("button", { type: "button", class: "btn btn-teks btn-bahaya hist-btn-hapus" }, "Hapus");
+        btnHapus.addEventListener("click", function () {
+          if (!confirm("Hapus mutasi ini?")) return;
+          btnHapus.disabled = true; btnHapus.textContent = "...";
+          LPLPO.hapus("mutasi", m.id).then(muat,
+            function () { btnHapus.disabled = false; btnHapus.textContent = "Hapus"; alert("Gagal."); });
+        });
+        tbody.appendChild(el("tr", {}, [
+          el("td", { "data-label": "Tanggal", class: "pudar hist-td-tgl" }, formatTglPendek(m.tanggal)),
+          el("td", { "data-label": "Unit", class: "pudar" }, unitE.nama || "?"),
+          el("td", { "data-label": "Obat" }, namaObatLabel(obatE) || "?"),
+          el("td", { "data-label": "Batch", class: "pudar" },
+            batchE ? (batchE.nomor_batch || "—") + (batchE.expired_date ? " · " + formatED(batchE.expired_date) : "") : "—"),
+          el("td", { "data-label": "Jumlah", class: "n" },
+            el("span", { class: m.jenis === "masuk" ? "hist-masuk" : "hist-keluar" },
+              (m.jenis === "masuk" ? "+" : "−") + formatAngka(m.jumlah))),
+          el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
+          el("td", { class: "hist-td-aksi" }, [btnHapus])
+        ]));
+      });
+      return el("table", { class: "tabel hist-tabel" }, [
+        el("thead", {}, [el("tr", {}, [
+          el("th", {}, "Tgl"), el("th", {}, "Unit"), el("th", {}, "Obat"),
+          el("th", {}, "Batch"), el("th", {}, "Jml"), el("th", {}, "Ket."), el("th", {})
+        ])]),
+        tbody
+      ]);
+    }
+
+    // ---- Mode LIST: tanggal → unit → item ----
+    function renderList(items, unitMap, autoExpandTgl, autoExpandUnit) {
+      // Group by tanggal (sort desc)
+      var byTgl = {}; var urutTgl = [];
+      items.forEach(function (m) {
+        if (!byTgl[m.tanggal]) { byTgl[m.tanggal] = {}; urutTgl.push(m.tanggal); }
+        var uid = m.unit;
+        if (!byTgl[m.tanggal][uid]) byTgl[m.tanggal][uid] = [];
+        byTgl[m.tanggal][uid].push(m);
+      });
+      // Dedup + sort desc
+      urutTgl = urutTgl.filter(function (v, i, a) { return a.indexOf(v) === i; })
+        .sort(function (a, b) { return b.localeCompare(a); });
+
+      var listEl = el("div", { class: "hist-list" });
+
+      urutTgl.forEach(function (tgl) {
+        var unitIds = Object.keys(byTgl[tgl]);
+        var totalHari = 0;
+        unitIds.forEach(function (uid) { byTgl[tgl][uid].forEach(function(m){ totalHari += Number(m.jumlah)||0; }); });
+
+        // Baris tanggal (level 1, bisa diklik expand)
+        var expanded = tgl === autoExpandTgl;
+        var ikonEl = el("span", { class: "hist-ikon-expand" }, expanded ? "▾" : "▸");
+        var ringkasanHari = el("span", { class: "pudar hist-hari-ringkasan" },
+          unitIds.length + " kegiatan · " + formatAngka(totalHari) + " item");
+        var barisTgl = el("button", { type: "button", class: "hist-baris-tgl" }, [
+          ikonEl,
+          el("span", { class: "hist-tgl-label" }, formatTglPanjang(tgl)),
+          ringkasanHari
+        ]);
+
+        var kontenTgl = el("div", { class: "hist-konten-tgl" + (expanded ? "" : " hist-collapsed") });
+
+        barisTgl.addEventListener("click", function () {
+          expanded = !expanded;
+          ikonEl.textContent = expanded ? "▾" : "▸";
+          kontenTgl.classList.toggle("hist-collapsed", !expanded);
+        });
+
+        // Level 2: per unit
+        unitIds.forEach(function (uid) {
+          var unitObj = unitMap[uid] || {};
+          var grup = byTgl[tgl][uid];
+          var totalUnit = 0; grup.forEach(function(m){ totalUnit += Number(m.jumlah)||0; });
+          var jenis = grup[0] && grup[0].jenis;
+          var badgeKls = jenis === "masuk" ? "hist-badge-masuk" : "hist-badge-keluar";
+          var badgeTeks = jenis === "masuk" ? "Penerimaan" : "Pengeluaran";
+
+          var expandedUnit = tgl === autoExpandTgl && uid === autoExpandUnit;
+          var ikonUnit = el("span", { class: "hist-ikon-expand" }, expandedUnit ? "▾" : "▸");
+          var barisUnit = el("button", { type: "button", class: "hist-baris-unit" }, [
+            ikonUnit,
+            el("span", { class: "hist-unit-nama" }, unitObj.nama || uid),
+            el("span", { class: "hist-badge " + badgeKls }, badgeTeks),
+            el("span", { class: "pudar hist-unit-ringkasan" }, grup.length + " item · " + formatAngka(totalUnit))
+          ]);
+
+          var kontenUnit = el("div", { class: "hist-konten-unit" + (expandedUnit ? "" : " hist-collapsed") });
+          kontenUnit.appendChild(buatTabelItem(grup, unitMap));
+
+          barisUnit.addEventListener("click", function () {
+            expandedUnit = !expandedUnit;
+            ikonUnit.textContent = expandedUnit ? "▾" : "▸";
+            kontenUnit.classList.toggle("hist-collapsed", !expandedUnit);
+          });
+
+          kontenTgl.appendChild(barisUnit);
+          kontenTgl.appendChild(kontenUnit);
+        });
+
+        listEl.appendChild(barisTgl);
+        listEl.appendChild(kontenTgl);
+      });
+
+      return listEl;
+    }
+
+    // ---- Mode TABEL PENUH ----
+    function renderTabelPenuh(items, unitMap) {
+      var wrap = el("div", { class: "hist-tabel-wrap" });
+      wrap.appendChild(buatTabelItem(items, unitMap));
+      wrap.appendChild(el("p", { class: "status-koneksi" }, formatAngka(items.length) + " baris."));
+      return wrap;
+    }
+
+    // ---- Muat data ----
     function muat() {
       konten.textContent = "";
       konten.appendChild(el("p", { class: "status-koneksi" }, "Memuat..."));
 
       var filterArr = [];
-      var tglVal = tglObj.getValue();
-      if (tglVal) filterArr.push('tanggal = "' + tglVal + '"');
-      if (pilUnit.value) filterArr.push('unit = "' + pilUnit.value + '"');
+      var bulanVal = inpBulan.value; // "YYYY-MM"
+      if (bulanVal) {
+        var parts = bulanVal.split("-");
+        var y = parts[0], m2 = parts[1];
+        var lastDay = new Date(Number(y), Number(m2), 0).getDate();
+        filterArr.push('tanggal >= "' + y + "-" + m2 + '-01"');
+        filterArr.push('tanggal <= "' + y + "-" + m2 + "-" + lastDay + '"');
+      }
+      if (pilUnit.value)  filterArr.push('unit = "' + pilUnit.value + '"');
       if (pilJenis.value) filterArr.push('jenis = "' + pilJenis.value + '"');
-      var filterStr = filterArr.join(" && ") || "";
 
       Promise.all([
         LPLPO.daftar("mutasi", {
-          perPage: 500, sort: "-tanggal,-created",
-          filter: filterStr,
+          perPage: 1000, sort: "-tanggal,-created",
+          filter: filterArr.join(" && "),
           expand: "daftar_obat,unit,batch,daftar_obat.kategori"
         }),
         LPLPO.daftar("unit", { perPage: 100, sort: "nama" })
       ]).then(function (hasil) {
-        var mutasiData = hasil[0];
-        var unitData = hasil[1];
+        var mutasiItems = hasil[0].items;
         var unitMap = {};
-        unitData.items.forEach(function (u) { unitMap[u.id] = u; });
+        hasil[1].items.forEach(function (u) { unitMap[u.id] = u; });
 
         konten.textContent = "";
-        if (!mutasiData.items.length) {
+        if (!mutasiItems.length) {
           konten.appendChild(el("p", { class: "status-koneksi" }, "Tidak ada mutasi untuk filter ini."));
           return;
         }
 
-        // Group by tanggal + unit
-        var grup = {};
-        var urutanGrup = [];
-        mutasiData.items.forEach(function (m) {
-          var kunci = m.tanggal + "|" + m.unit;
-          if (!grup[kunci]) { grup[kunci] = { tanggal: m.tanggal, unitId: m.unit, items: [] }; urutanGrup.push(kunci); }
-          grup[kunci].items.push(m);
-        });
-
-        urutanGrup.forEach(function (kunci) {
-          var g = grup[kunci];
-          var unitObj = unitMap[g.unitId] || {};
-          var totalMasuk = 0, totalKeluar = 0;
-          g.items.forEach(function (m) {
-            if (m.jenis === "masuk") totalMasuk += (Number(m.jumlah) || 0);
-            else totalKeluar += (Number(m.jumlah) || 0);
-          });
-
-          // Header kartu kegiatan
-          var badgeJenis = g.items[0] && g.items[0].jenis;
-          var badgeKls = badgeJenis === "masuk" ? "hist-badge-masuk" : "hist-badge-keluar";
-          var badgeTeks = badgeJenis === "masuk" ? "Penerimaan" : "Pengeluaran";
-
-          var headerKartu = el("div", { class: "hist-kartu-kepala" }, [
-            el("div", { class: "hist-kartu-info" }, [
-              el("span", { class: "hist-tanggal" }, formatTglPanjang(g.tanggal)),
-              el("span", { class: "hist-unit" }, unitObj.nama || g.unitId)
-            ]),
-            el("div", { class: "hist-kartu-meta" }, [
-              el("span", { class: "hist-badge " + badgeKls }, badgeTeks),
-              el("span", { class: "hist-ringkasan pudar" },
-                totalMasuk ? formatAngka(totalMasuk) + " masuk" :
-                totalKeluar ? formatAngka(totalKeluar) + " keluar" : "")
-            ])
-          ]);
-
-          // Tabel item
-          var tbodySel = el("tbody");
-          g.items.forEach(function (m) {
-            var obatE = m.expand && m.expand.daftar_obat;
-            var batchE = m.expand && m.expand.batch;
-            tbodySel.appendChild(el("tr", {}, [
-              el("td", { "data-label": "Obat" }, namaObatLabel(obatE) || m.daftar_obat || "?"),
-              el("td", { "data-label": "Batch", class: "pudar" },
-                batchE ? (batchE.nomor_batch || "—") + (batchE.expired_date ? " · " + formatED(batchE.expired_date) : "") : "—"),
-              el("td", { "data-label": "Jumlah", class: "n" }, [
-                el("span", { class: m.jenis === "masuk" ? "hist-masuk" : "hist-keluar" },
-                  (m.jenis === "masuk" ? "+" : "−") + formatAngka(m.jumlah))
-              ]),
-              el("td", { "data-label": "Keterangan", class: "pudar" }, m.keterangan || ""),
-              el("td", { class: "hist-td-aksi" }, [
-                (function () {
-                  var btnHapus = el("button", { type: "button", class: "btn btn-teks btn-bahaya hist-btn-hapus", title: "Hapus mutasi ini" }, "Hapus");
-                  btnHapus.addEventListener("click", function () {
-                    if (!confirm("Hapus mutasi ini?")) return;
-                    btnHapus.disabled = true; btnHapus.textContent = "...";
-                    LPLPO.hapus("mutasi", m.id).then(function () {
-                      muat();
-                    }, function () { btnHapus.disabled = false; btnHapus.textContent = "Hapus"; alert("Gagal menghapus."); });
-                  });
-                  return btnHapus;
-                })()
-              ])
-            ]));
-          });
-
-          var tabel = el("table", { class: "tabel hist-tabel" }, [
-            el("thead", {}, [el("tr", {}, [
-              el("th", {}, "Obat"), el("th", {}, "Batch"), el("th", {}, "Jumlah"),
-              el("th", {}, "Keterangan"), el("th", {})
-            ])]),
-            tbodySel
-          ]);
-
-          var kartu = el("div", { class: "panel hist-kartu" }, [headerKartu, tabel]);
-          konten.appendChild(kartu);
-        });
-
-        konten.appendChild(el("p", { class: "status-koneksi" },
-          formatAngka(mutasiData.totalItems) + " mutasi ditemukan."));
+        if (modeSaatIni === "tabel") {
+          konten.appendChild(renderTabelPenuh(mutasiItems, unitMap));
+        } else {
+          konten.appendChild(renderList(mutasiItems, unitMap, qp.tgl || "", qp.unit || ""));
+          // Reset qp setelah sekali auto-expand agar navigasi berikutnya tidak auto-expand lagi
+          qp = {};
+        }
       }, function (err) { tanganiGalat(err, muat, konten); });
     }
 
-    tombolFilter.addEventListener("click", muat);
-    tombolBersihkan.addEventListener("click", function () {
-      tglObj.setValue(""); pilUnit.value = ""; pilJenis.value = "";
+    tombolMuat.addEventListener("click", muat);
+    tombolMode.addEventListener("click", function () {
+      modeSaatIni = modeSaatIni === "list" ? "tabel" : "list";
+      tombolMode.textContent = modeSaatIni === "list" ? "☰ Tabel penuh" : "≡ Mode list";
       muat();
     });
 
-    // Auto-load dengan filter dari URL (atau tanpa filter jika dari menu)
     muat();
   }
 
