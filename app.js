@@ -3097,39 +3097,83 @@
     area.appendChild(konten);
 
     // ---- Render tabel item (dipakai di kedua mode) ----
-    function buatTabelItem(items, unitMap) {
+    // modeDetail: true = tabel penuh (semua kolom); false = ringkas di dalam list
+    function buatTabelItem(items, unitMap, modeDetail) {
+      var ikonHapusSVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
+
       var tbody = el("tbody");
       items.forEach(function (m) {
-        var obatE = m.expand && m.expand.daftar_obat;
+        var obatE = m.expand && m.expand.obat;
         var batchE = m.expand && m.expand.batch;
         var unitE = unitMap[m.unit] || {};
-        var btnHapus = el("button", { type: "button", class: "btn btn-teks btn-bahaya hist-btn-hapus" }, "Hapus");
+        var jenisMasuk = m.jenis === "masuk";
+
+        var btnHapus = el("button", { type: "button", class: "hist-btn-hapus", "aria-label": "Hapus mutasi ini", title: "Hapus" });
+        btnHapus.innerHTML = ikonHapusSVG;
         btnHapus.addEventListener("click", function () {
           if (!confirm("Hapus mutasi ini?")) return;
-          btnHapus.disabled = true; btnHapus.textContent = "...";
+          btnHapus.disabled = true;
           LPLPO.hapus("mutasi", m.id).then(muat,
-            function () { btnHapus.disabled = false; btnHapus.textContent = "Hapus"; alert("Gagal."); });
+            function () { btnHapus.disabled = false; alert("Gagal menghapus."); });
         });
-        tbody.appendChild(el("tr", {}, [
-          el("td", { "data-label": "Tanggal", class: "pudar hist-td-tgl" }, formatTglPendek(m.tanggal)),
-          el("td", { "data-label": "Unit", class: "pudar" }, unitE.nama || "?"),
-          el("td", { "data-label": "Obat" }, namaObatLabel(obatE) || "?"),
-          el("td", { "data-label": "Batch", class: "pudar" },
-            batchE ? (batchE.nomor_batch || "—") + (batchE.expired_date ? " · " + formatED(batchE.expired_date) : "") : "—"),
-          el("td", { "data-label": "Jumlah", class: "n" },
-            el("span", { class: m.jenis === "masuk" ? "hist-masuk" : "hist-keluar" },
-              (m.jenis === "masuk" ? "+" : "−") + formatAngka(m.jumlah))),
-          el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
-          el("td", { class: "hist-td-aksi" }, [btnHapus])
-        ]));
+
+        var tdMasuk = el("td", { "data-label": "Masuk", class: "n" });
+        var tdKeluar = el("td", { "data-label": "Keluar", class: "n" });
+        if (jenisMasuk) {
+          tdMasuk.appendChild(el("span", { class: "hist-masuk" }, formatAngka(m.jumlah)));
+        } else {
+          tdKeluar.appendChild(el("span", { class: "hist-keluar" }, formatAngka(m.jumlah)));
+        }
+
+        if (modeDetail) {
+          // Mode tabel penuh: semua kolom
+          var batchStr = batchE ? (batchE.nomor_batch || "—") : "—";
+          var edStr = batchE && batchE.expired_date ? formatED(batchE.expired_date) : "—";
+          tbody.appendChild(el("tr", {}, [
+            el("td", { "data-label": "Tgl", class: "pudar hist-td-tgl" }, formatTglPendek(m.tanggal)),
+            el("td", { "data-label": "Unit", class: "pudar" }, unitE.nama || "?"),
+            el("td", { "data-label": "Obat" }, namaObatLabel(obatE) || "?"),
+            el("td", { "data-label": "Batch", class: "pudar" }, batchStr),
+            el("td", { "data-label": "ED", class: "pudar" }, edStr),
+            tdMasuk,
+            tdKeluar,
+            el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
+            el("td", { class: "hist-td-aksi" }, [btnHapus])
+          ]));
+        } else {
+          // Mode list (ringkas): tanggal disembunyikan (sudah ada di header), unit juga
+          tbody.appendChild(el("tr", {}, [
+            el("td", { "data-label": "Obat" }, namaObatLabel(obatE) || "?"),
+            el("td", { "data-label": "Batch", class: "pudar" },
+              batchE ? (batchE.nomor_batch || "—") + (batchE.expired_date ? " · " + formatED(batchE.expired_date) : "") : "—"),
+            tdMasuk,
+            tdKeluar,
+            el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
+            el("td", { class: "hist-td-aksi" }, [btnHapus])
+          ]));
+        }
       });
-      return el("table", { class: "tabel hist-tabel" }, [
-        el("thead", {}, [el("tr", {}, [
-          el("th", {}, "Tgl"), el("th", {}, "Unit"), el("th", {}, "Obat"),
-          el("th", {}, "Batch"), el("th", {}, "Jml"), el("th", {}, "Ket."), el("th", {})
-        ])]),
-        tbody
-      ]);
+
+      if (modeDetail) {
+        return el("table", { class: "tabel hist-tabel" }, [
+          el("thead", {}, [el("tr", {}, [
+            el("th", {}, "Tgl"), el("th", {}, "Unit"), el("th", {}, "Obat"),
+            el("th", {}, "Batch"), el("th", {}, "ED"),
+            el("th", { class: "n" }, "Masuk"), el("th", { class: "n" }, "Keluar"),
+            el("th", {}, "Ket."), el("th", {})
+          ])]),
+          tbody
+        ]);
+      } else {
+        return el("table", { class: "tabel hist-tabel" }, [
+          el("thead", {}, [el("tr", {}, [
+            el("th", {}, "Obat"), el("th", {}, "Batch"),
+            el("th", { class: "n" }, "Masuk"), el("th", { class: "n" }, "Keluar"),
+            el("th", {}, "Ket."), el("th", {})
+          ])]),
+          tbody
+        ]);
+      }
     }
 
     // ---- Mode LIST: tanggal → unit → item ----
@@ -3146,23 +3190,39 @@
       urutTgl = urutTgl.filter(function (v, i, a) { return a.indexOf(v) === i; })
         .sort(function (a, b) { return b.localeCompare(a); });
 
+      var ikonPlusSVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+      var ikonPrintSVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>';
+
       var listEl = el("div", { class: "hist-list" });
 
       urutTgl.forEach(function (tgl) {
         var unitIds = Object.keys(byTgl[tgl]);
-        var totalHari = 0;
-        unitIds.forEach(function (uid) { byTgl[tgl][uid].forEach(function(m){ totalHari += Number(m.jumlah)||0; }); });
 
         // Baris tanggal (level 1, bisa diklik expand)
         var expanded = tgl === autoExpandTgl;
         var ikonEl = el("span", { class: "hist-ikon-expand" }, expanded ? "▾" : "▸");
         var ringkasanHari = el("span", { class: "pudar hist-hari-ringkasan" },
-          unitIds.length + " kegiatan · " + formatAngka(totalHari) + " item");
+          unitIds.length + " kegiatan");
+
+        // Tools di baris tanggal: tombol Tambah penerimaan + Print
+        var btnTambahHari = el("button", { type: "button", class: "hist-btn-tool", title: "Tambah penerimaan untuk tanggal ini", "aria-label": "Tambah penerimaan" });
+        btnTambahHari.innerHTML = ikonPlusSVG;
+        btnTambahHari.addEventListener("click", function (e) {
+          e.stopPropagation();
+          location.hash = "#/penerimaan?tgl=" + encodeURIComponent(tgl);
+        });
+        var btnPrintHari = el("button", { type: "button", class: "hist-btn-tool", title: "Print hari ini (segera hadir)", "aria-label": "Print", disabled: true });
+        btnPrintHari.innerHTML = ikonPrintSVG;
+        btnPrintHari.style.opacity = "0.3";
+        var toolsHari = el("div", { class: "hist-header-tools" }, [btnTambahHari, btnPrintHari]);
+
         var barisTgl = el("button", { type: "button", class: "hist-baris-tgl" }, [
           ikonEl,
           el("span", { class: "hist-tgl-label" }, formatTglPanjang(tgl)),
           ringkasanHari
         ]);
+        // Sisipkan tools secara terpisah (bukan child button) — pakai wrapper flex
+        var barisTglWrap = el("div", { class: "hist-baris-tgl-wrap" }, [barisTgl, toolsHari]);
 
         var kontenTgl = el("div", { class: "hist-konten-tgl" + (expanded ? "" : " hist-collapsed") });
 
@@ -3176,34 +3236,51 @@
         unitIds.forEach(function (uid) {
           var unitObj = unitMap[uid] || {};
           var grup = byTgl[tgl][uid];
-          var totalUnit = 0; grup.forEach(function(m){ totalUnit += Number(m.jumlah)||0; });
           var jenis = grup[0] && grup[0].jenis;
           var badgeKls = jenis === "masuk" ? "hist-badge-masuk" : "hist-badge-keluar";
           var badgeTeks = jenis === "masuk" ? "Penerimaan" : "Pengeluaran";
+          var jmlItem = grup.length + " item";
 
           var expandedUnit = tgl === autoExpandTgl && uid === autoExpandUnit;
           var ikonUnit = el("span", { class: "hist-ikon-expand" }, expandedUnit ? "▾" : "▸");
-          var barisUnit = el("button", { type: "button", class: "hist-baris-unit" }, [
+
+          // Tools di baris unit: tombol Tambah (ke form sesuai jenis) + Print
+          var btnTambahUnit = el("button", { type: "button", class: "hist-btn-tool",
+            title: jenis === "masuk" ? "Tambah penerimaan untuk unit ini" : "Tambah pengeluaran untuk unit ini",
+            "aria-label": "Tambah" });
+          btnTambahUnit.innerHTML = ikonPlusSVG;
+          btnTambahUnit.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var halaman = jenis === "masuk" ? "penerimaan" : "pengeluaran";
+            location.hash = "#/" + halaman + "?unit=" + encodeURIComponent(uid) + "&tgl=" + encodeURIComponent(tgl);
+          });
+          var btnPrintUnit = el("button", { type: "button", class: "hist-btn-tool", title: "Print unit ini (segera hadir)", "aria-label": "Print", disabled: true });
+          btnPrintUnit.innerHTML = ikonPrintSVG;
+          btnPrintUnit.style.opacity = "0.3";
+          var toolsUnit = el("div", { class: "hist-header-tools" }, [btnTambahUnit, btnPrintUnit]);
+
+          var barisUnitBtn = el("button", { type: "button", class: "hist-baris-unit" }, [
             ikonUnit,
             el("span", { class: "hist-unit-nama" }, unitObj.nama || uid),
             el("span", { class: "hist-badge " + badgeKls }, badgeTeks),
-            el("span", { class: "pudar hist-unit-ringkasan" }, grup.length + " item · " + formatAngka(totalUnit))
+            el("span", { class: "pudar hist-unit-ringkasan" }, jmlItem)
           ]);
+          var barisUnitWrap = el("div", { class: "hist-baris-unit-wrap" }, [barisUnitBtn, toolsUnit]);
 
           var kontenUnit = el("div", { class: "hist-konten-unit" + (expandedUnit ? "" : " hist-collapsed") });
-          kontenUnit.appendChild(buatTabelItem(grup, unitMap));
+          kontenUnit.appendChild(buatTabelItem(grup, unitMap, false));
 
-          barisUnit.addEventListener("click", function () {
+          barisUnitBtn.addEventListener("click", function () {
             expandedUnit = !expandedUnit;
             ikonUnit.textContent = expandedUnit ? "▾" : "▸";
             kontenUnit.classList.toggle("hist-collapsed", !expandedUnit);
           });
 
-          kontenTgl.appendChild(barisUnit);
+          kontenTgl.appendChild(barisUnitWrap);
           kontenTgl.appendChild(kontenUnit);
         });
 
-        listEl.appendChild(barisTgl);
+        listEl.appendChild(barisTglWrap);
         listEl.appendChild(kontenTgl);
       });
 
@@ -3213,7 +3290,7 @@
     // ---- Mode TABEL PENUH ----
     function renderTabelPenuh(items, unitMap) {
       var wrap = el("div", { class: "hist-tabel-wrap" });
-      wrap.appendChild(buatTabelItem(items, unitMap));
+      wrap.appendChild(buatTabelItem(items, unitMap, true));
       wrap.appendChild(el("p", { class: "status-koneksi" }, formatAngka(items.length) + " baris."));
       return wrap;
     }
@@ -3239,7 +3316,7 @@
         LPLPO.daftar("mutasi", {
           perPage: 1000, sort: "-tanggal,-created",
           filter: filterArr.join(" && "),
-          expand: "daftar_obat,unit,batch,daftar_obat.kategori"
+          expand: "obat,unit,batch,obat.kategori"
         }),
         LPLPO.daftar("unit", { perPage: 100, sort: "nama" })
       ]).then(function (hasil) {
