@@ -142,9 +142,7 @@
 }
 .pnr-header .baris-isian .field:first-child { flex: 2 1 180px; }
 .pnr-header .baris-isian .field:last-child  { flex: 0 0 auto; }
-.pnr-header .baris-isian .field {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
-}
+.pnr-header .baris-isian .field { align-items: flex-start; }
 .pnr-select {
   height: var(--sentuh); padding: 0 12px; width: 100%;
   border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
@@ -454,16 +452,15 @@
   font-family: var(--font-form); font-size: 16px;
   width: auto; min-width: 0;
 }
-.tgl-wrap:focus-within { outline: 0px solid var(--hijau-teks); outline-offset: 1px; }
-.tgl-dd, .tgl-mm, .tgl-yy {
-  border: none; background: transparent; padding: 0; margin: 0;
+.tgl-wrap:focus-within { outline: 3px solid var(--hijau-teks); outline-offset: 1px; }
+/* Reset border dari .field input rule di tema.css */
+.tgl-wrap .tgl-dd, .tgl-wrap .tgl-mm, .tgl-wrap .tgl-yy {
+  border: none !important; background: transparent !important;
+  padding: 0 !important; margin: 0; height: auto !important;
   font-family: var(--font-form); font-size: 16px; color: var(--tinta);
   text-align: center; outline: none; min-width: 0;
-  flex-shrink: 0;
+  flex-shrink: 0; width: auto;
 }
-.tgl-dd { width: 2ch; }
-.tgl-mm { width: 2ch; }
-.tgl-yy { width: 4ch; }
 .tgl-dd::placeholder, .tgl-mm::placeholder, .tgl-yy::placeholder { color: var(--tinta-pudar); }
 .tgl-sep { color: var(--tinta-pudar); user-select: none; font-size: 14px; padding: 0 2px; flex-shrink: 0; }
 /* Tombol kalender dan native input tersembunyi */
