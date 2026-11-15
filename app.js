@@ -361,12 +361,25 @@
     return { el: wrap, getValue: getValue, setValue: setValue };
   }
 
-  // Helper: nama obat + kategori untuk menghindari kebingungan nama duplikat antar kategori
+  // Helper: nama obat + badge kategori (kembalikan elemen DOM)
+  function namaObatEl(obat) {
+    if (!obat) return el("span", {}, "?");
+    var kat = obat.expand && obat.expand.kategori;
+    var singkat = kat && kat.nama_singkat;
+    var wrap = el("span", { class: "obat-nama-wrap" });
+    wrap.appendChild(el("span", { class: "obat-nama-utama" }, obat.nama_utama || obat.kode || "?"));
+    if (singkat) {
+      wrap.appendChild(el("span", { class: "obat-kat-badge" }, singkat));
+    }
+    return wrap;
+  }
+
+  // Helper string (untuk konteks non-DOM, misal title/aria)
   function namaObatLabel(obat) {
     if (!obat) return "?";
     var kat = obat.expand && obat.expand.kategori;
-    var katStr = kat ? kat.nama || kat.kode : (obat.kategori ? "?" : "");
-    return katStr ? obat.nama_utama + " — " + katStr : (obat.nama_utama || obat.kode || "?");
+    var singkat = kat && kat.nama_singkat;
+    return singkat ? obat.nama_utama + " · " + singkat : (obat.nama_utama || obat.kode || "?");
   }
 
   // ---------- Autocomplete cari obat ----------
@@ -3073,10 +3086,37 @@
       pilJenis.appendChild(el("option", { value: j[0] }, j[1]));
     });
 
-    // Bulan: default bulan ini
+    // Filter tanggal: default bulan ini, bisa ganti ke rentang custom
     var today = new Date();
+    var bulanDefault = today.getFullYear() + "-" + String(today.getMonth()+1).padStart(2,"0");
+    var tglDariDefault = bulanDefault + "-01";
+    var lastDay = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
+    var tglSampaiDefault = bulanDefault + "-" + String(lastDay).padStart(2,"0");
+
+    var modeRentang = false; // false = bulan, true = rentang custom
+
     var inpBulan = el("input", { type: "month", class: "hist-inp-bulan",
-      value: today.getFullYear() + "-" + String(today.getMonth()+1).padStart(2,"0") });
+      value: bulanDefault });
+
+    var tglDariObj = buatInputTanggal(tglDariDefault, function(){}, { label: "Dari" });
+    var tglSampaiObj = buatInputTanggal(tglSampaiDefault, function(){}, { label: "Sampai" });
+
+    var labelBulan = el("label", { class: "hist-toolbar-label" }, [
+      el("span", { class: "pudar" }, "Bulan"), inpBulan
+    ]);
+    var labelRentang = el("div", { class: "hist-toolbar-rentang hist-hidden" }, [
+      el("label", { class: "hist-toolbar-label" }, [el("span", { class: "pudar" }, "Dari"), tglDariObj.el]),
+      el("label", { class: "hist-toolbar-label" }, [el("span", { class: "pudar" }, "Sampai"), tglSampaiObj.el])
+    ]);
+
+    var tombolRentang = el("button", { type: "button", class: "hist-btn-rentang", title: "Pilih rentang tanggal custom" });
+    tombolRentang.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg> Rentang';
+    tombolRentang.addEventListener("click", function() {
+      modeRentang = !modeRentang;
+      labelBulan.classList.toggle("hist-hidden", modeRentang);
+      labelRentang.classList.toggle("hist-hidden", !modeRentang);
+      tombolRentang.classList.toggle("hist-btn-rentang-aktif", modeRentang);
+    });
 
     var modeSaatIni = "list"; // "list" | "tabel"
     var tombolMode = el("button", { type: "button", class: "btn btn-garis hist-btn-mode" }, "☰ Tabel penuh");
@@ -3084,7 +3124,9 @@
     var tombolMuat = el("button", { type: "button", class: "btn btn-sekunder" }, "Tampilkan");
 
     var toolbar = el("div", { class: "hist-toolbar" }, [
-      el("label", { class: "hist-toolbar-label" }, [el("span", { class: "pudar" }, "Bulan"), inpBulan]),
+      labelBulan,
+      labelRentang,
+      tombolRentang,
       el("label", { class: "hist-toolbar-label" }, [el("span", { class: "pudar" }, "Unit"), pilUnit]),
       el("label", { class: "hist-toolbar-label" }, [el("span", { class: "pudar" }, "Jenis"), pilJenis]),
       tombolMuat,
@@ -3129,10 +3171,12 @@
           // Mode tabel penuh: semua kolom
           var batchStr = batchE ? (batchE.nomor_batch || "—") : "—";
           var edStr = batchE && batchE.expired_date ? formatED(batchE.expired_date) : "—";
+          var tdObatDetail = el("td", { "data-label": "Obat" });
+          tdObatDetail.appendChild(namaObatEl(obatE));
           tbody.appendChild(el("tr", {}, [
             el("td", { "data-label": "Tgl", class: "pudar hist-td-tgl" }, formatTglPendek(m.tanggal)),
             el("td", { "data-label": "Unit", class: "pudar" }, unitE.nama || "?"),
-            el("td", { "data-label": "Obat" }, namaObatLabel(obatE) || "?"),
+            tdObatDetail,
             el("td", { "data-label": "Batch", class: "pudar" }, batchStr),
             el("td", { "data-label": "ED", class: "pudar" }, edStr),
             tdMasuk,
@@ -3142,8 +3186,10 @@
           ]));
         } else {
           // Mode list (ringkas): tanggal disembunyikan (sudah ada di header), unit juga
+          var tdObatList = el("td", { "data-label": "Obat" });
+          tdObatList.appendChild(namaObatEl(obatE));
           tbody.appendChild(el("tr", {}, [
-            el("td", { "data-label": "Obat" }, namaObatLabel(obatE) || "?"),
+            tdObatList,
             el("td", { "data-label": "Batch", class: "pudar" },
               batchE ? (batchE.nomor_batch || "—") + (batchE.expired_date ? " · " + formatED(batchE.expired_date) : "") : "—"),
             tdMasuk,
@@ -3301,13 +3347,20 @@
       konten.appendChild(el("p", { class: "status-koneksi" }, "Memuat..."));
 
       var filterArr = [];
-      var bulanVal = inpBulan.value; // "YYYY-MM"
-      if (bulanVal) {
-        var parts = bulanVal.split("-");
-        var y = parts[0], m2 = parts[1];
-        var lastDay = new Date(Number(y), Number(m2), 0).getDate();
-        filterArr.push('tanggal >= "' + y + "-" + m2 + '-01"');
-        filterArr.push('tanggal <= "' + y + "-" + m2 + "-" + lastDay + '"');
+      if (modeRentang) {
+        var dari = tglDariObj.getValue();
+        var sampai = tglSampaiObj.getValue();
+        if (dari)   filterArr.push('tanggal >= "' + dari + '"');
+        if (sampai) filterArr.push('tanggal <= "' + sampai + '"');
+      } else {
+        var bulanVal = inpBulan.value; // "YYYY-MM"
+        if (bulanVal) {
+          var parts = bulanVal.split("-");
+          var y = parts[0], m2 = parts[1];
+          var lastDayM = new Date(Number(y), Number(m2), 0).getDate();
+          filterArr.push('tanggal >= "' + y + "-" + m2 + '-01"');
+          filterArr.push('tanggal <= "' + y + "-" + m2 + "-" + String(lastDayM).padStart(2,"0") + '"');
+        }
       }
       if (pilUnit.value)  filterArr.push('unit = "' + pilUnit.value + '"');
       if (pilJenis.value) filterArr.push('jenis = "' + pilJenis.value + '"');
