@@ -142,6 +142,7 @@
 }
 .pnr-header .baris-isian .field:first-child { flex: 2 1 180px; }
 .pnr-header .baris-isian .field:last-child  { flex: 0 0 auto; }
+.pnr-header .baris-isian .field { align-items: flex-start; }
 .pnr-select {
   height: var(--sentuh); padding: 0 12px; width: 100%;
   border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
@@ -449,20 +450,17 @@
   background: var(--kartu); border: 1.5px solid var(--garis-isian);
   border-radius: var(--radius); padding: 0 8px; height: var(--sentuh);
   font-family: var(--font-form); font-size: 16px;
-  width: fit-content; min-width: 0;
+  width: auto; min-width: 0;
 }
 .tgl-wrap:focus-within { outline: 3px solid var(--hijau-teks); outline-offset: 1px; }
-/* Ketika dipakai di form penerimaan/pengeluaran — ikut lebar field-nya */
-.field .tgl-wrap { width: 100%; }
-.tgl-dd, .tgl-mm, .tgl-yy {
-  border: none; background: transparent; padding: 0; margin: 0;
+/* Reset border dari .field input rule di tema.css */
+.tgl-wrap .tgl-dd, .tgl-wrap .tgl-mm, .tgl-wrap .tgl-yy {
+  border: none !important; background: transparent !important;
+  padding: 0 !important; margin: 0; height: auto !important;
   font-family: var(--font-form); font-size: 16px; color: var(--tinta);
   text-align: center; outline: none; min-width: 0;
-  flex-shrink: 0;
+  flex-shrink: 0; width: auto;
 }
-.tgl-dd { width: 2ch; }
-.tgl-mm { width: 2ch; }
-.tgl-yy { width: 4ch; }
 .tgl-dd::placeholder, .tgl-mm::placeholder, .tgl-yy::placeholder { color: var(--tinta-pudar); }
 .tgl-sep { color: var(--tinta-pudar); user-select: none; font-size: 14px; padding: 0 2px; flex-shrink: 0; }
 /* Tombol kalender dan native input tersembunyi */
@@ -693,6 +691,34 @@
 .hist-sel-jenis { min-width: 90px; }
 .hist-inp-bulan { min-width: 130px; }
 .hist-btn-mode { font-size: 13px; min-height: 34px; padding: 0 12px; }
+
+/* Tombol + panel rentang tanggal custom */
+.hist-btn-rentang {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 34px; padding: 0 10px; font-size: 13px; font-family: var(--font-form);
+  border: 1.5px solid var(--garis-isian); border-radius: var(--radius);
+  background: var(--kartu); color: var(--tinta-pudar); cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.hist-btn-rentang:hover { background: var(--kartu); color: var(--tinta); }
+.hist-btn-rentang-aktif {
+  border-color: var(--hijau-teks); color: var(--hijau-teks);
+  background: color-mix(in srgb, var(--hijau-teks) 10%, transparent);
+}
+.hist-toolbar-rentang {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end;
+}
+.hist-hidden { display: none !important; }
+
+/* Badge kategori di kolom obat */
+.obat-nama-wrap { display: flex; flex-direction: column; gap: 2px; }
+.obat-nama-utama { font-size: 13px; line-height: 1.3; }
+.obat-kat-badge {
+  display: inline-block; align-self: flex-start;
+  padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: color-mix(in srgb, var(--hijau-teks) 12%, transparent);
+  color: var(--hijau-teks);
+}
 
 /* ---- Mode LIST ---- */
 .hist-list { border: 1px solid var(--garis); border-radius: var(--radius); overflow: hidden; }
