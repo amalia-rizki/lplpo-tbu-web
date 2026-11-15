@@ -710,14 +710,33 @@
 }
 .hist-hidden { display: none !important; }
 
-/* Badge kategori di kolom obat */
-.obat-nama-wrap { display: flex; flex-direction: column; gap: 2px; }
-.obat-nama-utama { font-size: 13px; line-height: 1.3; }
+/* Badge kategori di kolom obat — inline satu baris */
+.obat-nama-wrap { display: inline-flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+.obat-nama-utama { font-size: 13px; }
 .obat-kat-badge {
-  display: inline-block; align-self: flex-start;
-  padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600;
-  background: color-mix(in srgb, var(--hijau-teks) 12%, transparent);
-  color: var(--hijau-teks);
+  display: inline-block; flex-shrink: 0;
+  padding: 0px 5px; border-radius: 999px; font-size: 10px; font-weight: 600;
+  line-height: 1.6;
+}
+/* Warna per kategori — hash dari id */
+.kat-biru    { background: #dbeafe; color: #1d4ed8; }
+.kat-hijau   { background: #dcfce7; color: #15803d; }
+.kat-ungu    { background: #ede9fe; color: #6d28d9; }
+.kat-oranye  { background: #ffedd5; color: #c2410c; }
+.kat-merah   { background: #fee2e2; color: #b91c1c; }
+.kat-teal    { background: #ccfbf1; color: #0f766e; }
+.kat-coklat  { background: #fef3c7; color: #92400e; }
+.kat-pink    { background: #fce7f3; color: #9d174d; }
+.kat-abu     { background: var(--hijau-muda); color: var(--hijau-teks); }
+@media (prefers-color-scheme: dark) {
+  .kat-biru   { background: #1e3a5f; color: #93c5fd; }
+  .kat-hijau  { background: #14532d; color: #86efac; }
+  .kat-ungu   { background: #3b1f6e; color: #c4b5fd; }
+  .kat-oranye { background: #431407; color: #fdba74; }
+  .kat-merah  { background: #450a0a; color: #fca5a5; }
+  .kat-teal   { background: #042f2e; color: #5eead4; }
+  .kat-coklat { background: #451a03; color: #fcd34d; }
+  .kat-pink   { background: #500724; color: #f9a8d4; }
 }
 
 /* ---- Mode LIST ---- */
@@ -824,6 +843,7 @@
 /* Tabel dalam mode list dan mode tabel penuh */
 .hist-tabel { width: 100%; margin-top: 4px; font-size: 13px; }
 .hist-td-tgl { white-space: nowrap; }
+.hist-td-ed  { white-space: nowrap; min-width: 72px; }
 .hist-td-aksi { width: 32px; text-align: right; }
 
 /* Tombol hapus — icon kecil, tidak mencolok */

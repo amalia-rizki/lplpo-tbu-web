@@ -361,7 +361,21 @@
     return { el: wrap, getValue: getValue, setValue: setValue };
   }
 
-  // Helper: nama obat + badge kategori (kembalikan elemen DOM)
+  // Warna badge per kategori (urutan → warna)
+  var _katWarna = ["kat-biru","kat-hijau","kat-ungu","kat-oranye","kat-merah","kat-teal","kat-coklat","kat-pink"];
+  var _katWarnaCache = {};
+  function katBadgeKelas(kat) {
+    if (!kat) return "kat-abu";
+    var id = kat.id || kat.nama || "";
+    if (!_katWarnaCache[id]) {
+      var idx = 0;
+      for (var i = 0; i < id.length; i++) idx = (idx * 31 + id.charCodeAt(i)) & 0xffff;
+      _katWarnaCache[id] = _katWarna[idx % _katWarna.length];
+    }
+    return _katWarnaCache[id];
+  }
+
+  // Helper: nama obat + badge kategori inline satu baris
   function namaObatEl(obat) {
     if (!obat) return el("span", {}, "?");
     var kat = obat.expand && obat.expand.kategori;
@@ -369,7 +383,7 @@
     var wrap = el("span", { class: "obat-nama-wrap" });
     wrap.appendChild(el("span", { class: "obat-nama-utama" }, obat.nama_utama || obat.kode || "?"));
     if (singkat) {
-      wrap.appendChild(el("span", { class: "obat-kat-badge" }, singkat));
+      wrap.appendChild(el("span", { class: "obat-kat-badge " + katBadgeKelas(kat) }, singkat));
     }
     return wrap;
   }
@@ -620,15 +634,16 @@
     pilBatch.appendChild(el("option", { value: "" }, "— batch —"));
     pilBatch.appendChild(el("option", { value: "__baru__" }, "+ Batch baru"));
 
-    // Muat batch dari server
+    // Muat batch dari server — exclude yang sudah expired
     LPLPO.daftar("batch", {
       perPage: 50, sort: "expired_date,nomor_batch",
-      filter: 'obat = "' + b.obatId + '"'
+      filter: 'obat = "' + b.obatId + '" && (expired_date = "" || expired_date >= "' + hariIni() + '")'
     }).then(function (db) {
       // Insert sebelum opsi "baru"
       var opsBaru = pilBatch.querySelector("option[value='__baru__']");
       db.items.forEach(function (bt) {
-        var label = (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " · " + formatED(bt.expired_date) : "");
+        var stok = bt.stok_sistem !== undefined && bt.stok_sistem !== null ? bt.stok_sistem : "?";
+        var label = (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " · " + formatED(bt.expired_date) : "") + " [stok " + stok + "]";
         var opt = el("option", { value: bt.id }, label);
         pilBatch.insertBefore(opt, opsBaru);
       });
@@ -3168,9 +3183,11 @@
         }
 
         if (modeDetail) {
-          // Mode tabel penuh: semua kolom
+          // Mode tabel penuh: semua kolom + sisa stok batch
           var batchStr = batchE ? (batchE.nomor_batch || "—") : "—";
           var edStr = batchE && batchE.expired_date ? formatED(batchE.expired_date) : "—";
+          var sisaBatch = batchE && batchE.stok_sistem != null ? formatAngka(batchE.stok_sistem) : "—";
+          var sisaObat = obatE && obatE.stok_sistem != null ? formatAngka(obatE.stok_sistem) : "—";
           var tdObatDetail = el("td", { "data-label": "Obat" });
           tdObatDetail.appendChild(namaObatEl(obatE));
           tbody.appendChild(el("tr", {}, [
@@ -3178,9 +3195,11 @@
             el("td", { "data-label": "Unit", class: "pudar" }, unitE.nama || "?"),
             tdObatDetail,
             el("td", { "data-label": "Batch", class: "pudar" }, batchStr),
-            el("td", { "data-label": "ED", class: "pudar" }, edStr),
+            el("td", { "data-label": "ED", class: "pudar hist-td-ed" }, edStr),
             tdMasuk,
             tdKeluar,
+            el("td", { "data-label": "Sisa batch", class: "n pudar" }, sisaBatch),
+            el("td", { "data-label": "Sisa obat", class: "n pudar" }, sisaObat),
             el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
             el("td", { class: "hist-td-aksi" }, [btnHapus])
           ]));
@@ -3206,6 +3225,7 @@
             el("th", {}, "Tgl"), el("th", {}, "Unit"), el("th", {}, "Obat"),
             el("th", {}, "Batch"), el("th", {}, "ED"),
             el("th", { class: "n" }, "Masuk"), el("th", { class: "n" }, "Keluar"),
+            el("th", { class: "n" }, "Sisa batch"), el("th", { class: "n" }, "Sisa obat"),
             el("th", {}, "Ket."), el("th", {})
           ])]),
           tbody
