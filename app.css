@@ -452,8 +452,8 @@
   width: fit-content; min-width: 0;
 }
 .tgl-wrap:focus-within { outline: 3px solid var(--hijau-teks); outline-offset: 1px; }
-/* Ketika dipakai di form penerimaan/pengeluaran — ikut lebar field-nya */
-.field .tgl-wrap { width: 100%; }
+/* Ketika dipakai di form penerimaan/pengeluaran — ikut lebar field-nya tapi isi rata kiri */
+.field .tgl-wrap { width: 100%; justify-content: flex-start; }
 .tgl-dd, .tgl-mm, .tgl-yy {
   border: none; background: transparent; padding: 0; margin: 0;
   font-family: var(--font-form); font-size: 16px; color: var(--tinta);
