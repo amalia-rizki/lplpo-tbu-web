@@ -135,6 +135,34 @@ a { color: var(--hijau-teks); }
 .baris-isian { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
 .form-sempit { max-width: var(--lebar-form); }
 
+/*input khusus tanggal*/
+/* Input tanggal custom: override CSS global .field input */
+.field .tgl-wrap input {
+  width: auto;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0 4px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.field .tgl-wrap .tgl-dd,
+.field .tgl-wrap .tgl-mm {
+  width: 42px;
+}
+
+.field .tgl-wrap .tgl-yy {
+  width: 64px;
+}
+
+.field .tgl-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
 /* Lencana dan cap */
 .lencana { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; }
 .lencana.aman { background: var(--aman-latar); color: var(--aman-teks); }
