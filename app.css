@@ -444,16 +444,14 @@
 
 /* ---------- Input tanggal dd/mm/yyyy ---------- */
 .tgl-wrap {
-  display: inline-flex; align-items: center; gap: 0;
+  display: inline-flex !important; align-items: center; gap: 0;
   position: relative;
   background: var(--kartu); border: 1.5px solid var(--garis-isian);
   border-radius: var(--radius); padding: 0 8px; height: var(--sentuh);
   font-family: var(--font-form); font-size: 16px;
-  width: fit-content; min-width: 0;
+  width: auto !important; min-width: 0;
 }
 .tgl-wrap:focus-within { outline: 3px solid var(--hijau-teks); outline-offset: 1px; }
-/* Ketika dipakai di form penerimaan/pengeluaran — cukup fit-content, max ikut field */
-.field .tgl-wrap { width: fit-content; max-width: 100%; justify-content: flex-start; }
 .tgl-dd, .tgl-mm, .tgl-yy {
   border: none; background: transparent; padding: 0; margin: 0;
   font-family: var(--font-form); font-size: 16px; color: var(--tinta);
