@@ -3605,7 +3605,8 @@
   // Alamat #/master/unit dibaca sebagai halaman "master" dengan bagian "unit".
   function halamanAktif() {
     var bagian = (location.hash || "").replace(/^#\//, "").split("/");
-    var h = DAFTAR_HALAMAN.filter(function (x) { return x.id === bagian[0]; })[0] || DAFTAR_HALAMAN[0];
+    var idBagian = bagian[0].split("?")[0]; // strip query string
+    var h = DAFTAR_HALAMAN.filter(function (x) { return x.id === idBagian; })[0] || DAFTAR_HALAMAN[0];
     return { h: h, sub: bagian[1] || "" };
   }
 
