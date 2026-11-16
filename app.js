@@ -3298,10 +3298,80 @@
     var konten = el("div", { class: "hist-konten" });
     area.appendChild(konten);
 
+    // ---- Modal edit mutasi ----
+    function buatModalEditMutasi(m, obatE, batchE, unitE, onSelesai) {
+      var overlay = el("div", { class: "modal-overlay", role: "dialog", "aria-modal": "true", "aria-label": "Edit mutasi" });
+      function tutup() { overlay.remove(); }
+      overlay.addEventListener("click", function (e) { if (e.target === overlay) tutup(); });
+      overlay.addEventListener("keydown", function (e) { if (e.key === "Escape") tutup(); });
+
+      var kotak = el("div", { class: "modal-kotak" });
+      overlay.appendChild(kotak);
+
+      var namaObat = obatE ? (obatE.nama_utama || obatE.kode || "?") : "?";
+      var namaUnit = unitE.nama || "?";
+      var namaJenis = m.jenis === "masuk" ? "Masuk" : "Keluar";
+      var namaBatch = batchE ? (batchE.nomor_batch || "tanpa nomor") + (batchE.expired_date ? " · " + formatED(batchE.expired_date) : "") : "—";
+
+      kotak.appendChild(el("div", { class: "modal-judul" }, [
+        el("strong", {}, "Edit mutasi"),
+        (function () { var t = el("button", { type: "button", class: "modal-tutup", "aria-label": "Tutup" }, "✕"); t.addEventListener("click", tutup); return t; })()
+      ]));
+
+      var pesan = el("p", { class: "pesan", hidden: true });
+
+      var tglObj = buatInputTanggal(m.tanggal, function () {}, { label: "Tanggal" });
+      var inpJumlah = el("input", { type: "number", id: "med-jumlah", class: "mob-inp", min: "1", step: "1", value: String(m.jumlah), inputmode: "numeric" });
+      var inpKet = el("input", { type: "text", id: "med-ket", class: "mob-inp", value: m.keterangan || "", placeholder: "Keterangan (opsional)" });
+
+      var tombolSimpan = el("button", { type: "button", class: "btn btn-utama" }, "Simpan perubahan");
+
+      kotak.appendChild(el("div", { class: "mob-form" }, [
+        pesan,
+        el("p", { class: "med-info" }, [
+          el("span", { class: "med-label" }, namaJenis + " · "),
+          el("span", {}, namaObat),
+          el("span", { class: "med-label" }, " · " + namaUnit),
+          namaBatch !== "—" ? el("span", { class: "med-label" }, " · Batch " + namaBatch) : el("span", {})
+        ]),
+        el("div", { class: "field" }, [el("label", { "for": "med-tgl" }, "Tanggal"), tglObj.el]),
+        el("div", { class: "field" }, [el("label", { "for": "med-jumlah" }, "Jumlah"), inpJumlah]),
+        el("div", { class: "field" }, [el("label", { "for": "med-ket" }, "Keterangan"), inpKet]),
+        el("div", { class: "mob-aksi" }, [tombolSimpan])
+      ]));
+
+      tombolSimpan.addEventListener("click", function () {
+        var tglBaru = tglObj.getValue();
+        var jumlahBaru = parseInt(inpJumlah.value, 10);
+        if (!tglBaru || isNaN(jumlahBaru) || jumlahBaru < 1) {
+          pesan.textContent = "Tanggal dan jumlah wajib diisi.";
+          pesan.className = "pesan galat"; pesan.hidden = false;
+          return;
+        }
+        tombolSimpan.disabled = true; tombolSimpan.textContent = "Menyimpan...";
+        LPLPO.ubah("mutasi", m.id, {
+          tanggal: tglBaru,
+          jumlah: jumlahBaru,
+          keterangan: inpKet.value.trim()
+        }).then(function () {
+          tutup();
+          onSelesai();
+        }, function (err) {
+          pesan.textContent = err.pesan || "Gagal menyimpan.";
+          pesan.className = "pesan galat"; pesan.hidden = false;
+          tombolSimpan.disabled = false; tombolSimpan.textContent = "Simpan perubahan";
+        });
+      });
+
+      document.body.appendChild(overlay);
+      setTimeout(function () { inpJumlah.focus(); inpJumlah.select(); }, 50);
+    }
+
     // ---- Render tabel item (dipakai di kedua mode) ----
     // modeDetail: true = tabel penuh (semua kolom); false = ringkas di dalam list
     function buatTabelItem(items, unitMap, modeDetail) {
       var ikonHapusSVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
+      var ikonEditSVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 
       var tbody = el("tbody");
       items.forEach(function (m) {
@@ -3317,6 +3387,12 @@
           btnHapus.disabled = true;
           LPLPO.hapus("mutasi", m.id).then(muat,
             function () { btnHapus.disabled = false; alert("Gagal menghapus."); });
+        });
+
+        var btnEdit = el("button", { type: "button", class: "hist-btn-edit", "aria-label": "Edit mutasi ini", title: "Edit" });
+        btnEdit.innerHTML = ikonEditSVG;
+        btnEdit.addEventListener("click", function () {
+          buatModalEditMutasi(m, obatE, batchE, unitE, function () { muat(); });
         });
 
         var tdMasuk = el("td", { "data-label": "Masuk", class: "n" });
@@ -3344,9 +3420,8 @@
             tdMasuk,
             tdKeluar,
             el("td", { "data-label": "Sisa batch", class: "n pudar" }, sisaBatch),
-            el("td", { "data-label": "Sisa obat", class: "n pudar" }, sisaObat),
             el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
-            el("td", { class: "hist-td-aksi" }, [btnHapus])
+            el("td", { class: "hist-td-aksi" }, [btnEdit, btnHapus])
           ]));
         } else {
           // Mode list (ringkas): tanggal disembunyikan (sudah ada di header), unit juga
@@ -3359,24 +3434,24 @@
             tdMasuk,
             tdKeluar,
             el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
-            el("td", { class: "hist-td-aksi" }, [btnHapus])
+            el("td", { class: "hist-td-aksi" }, [btnEdit, btnHapus])
           ]));
         }
       });
 
       if (modeDetail) {
-        return el("table", { class: "tabel hist-tabel" }, [
+        return el("table", { class: "tabel hist-tabel hist-tabel-border" }, [
           el("thead", {}, [el("tr", {}, [
             el("th", {}, "Tgl"), el("th", {}, "Unit"), el("th", {}, "Obat"),
             el("th", {}, "Batch"), el("th", {}, "ED"),
             el("th", { class: "n" }, "Masuk"), el("th", { class: "n" }, "Keluar"),
-            el("th", { class: "n" }, "Sisa batch"), el("th", { class: "n" }, "Sisa obat"),
+            el("th", { class: "n" }, "Sisa batch"),
             el("th", {}, "Ket."), el("th", {})
           ])]),
           tbody
         ]);
       } else {
-        return el("table", { class: "tabel hist-tabel" }, [
+        return el("table", { class: "tabel hist-tabel hist-tabel-border" }, [
           el("thead", {}, [el("tr", {}, [
             el("th", {}, "Obat"), el("th", {}, "Batch"),
             el("th", { class: "n" }, "Masuk"), el("th", { class: "n" }, "Keluar"),

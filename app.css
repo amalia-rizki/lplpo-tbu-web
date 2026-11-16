@@ -847,7 +847,7 @@
 .hist-td-aksi { width: 32px; text-align: right; }
 
 /* Tombol hapus — icon kecil, tidak mencolok */
-.hist-btn-hapus {
+.hist-btn-hapus, .hist-btn-edit {
   display: flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; padding: 0;
   background: transparent; border: none; cursor: pointer;
@@ -856,8 +856,30 @@
   transition: color 0.12s, opacity 0.12s, background 0.12s;
 }
 .hist-btn-hapus:hover { color: var(--bahaya); opacity: 1; background: color-mix(in srgb, var(--bahaya) 10%, transparent); }
+.hist-btn-edit:hover { color: var(--hijau-teks); opacity: 1; background: color-mix(in srgb, var(--hijau-teks) 10%, transparent); }
+.hist-td-aksi { display: flex; align-items: center; gap: 2px; justify-content: flex-end; }
+
+/* Border tabel histori */
+.hist-tabel-border { border-collapse: collapse; }
+.hist-tabel-border th,
+.hist-tabel-border td {
+  border: 1px solid var(--garis);
+}
+.hist-tabel-border thead th {
+  background: color-mix(in srgb, var(--hijau-teks) 8%, transparent);
+  border-color: var(--garis);
+}
+/* Kolom masuk/keluar lebih menonjol */
+.hist-tabel-border td.n .hist-masuk,
+.hist-tabel-border td.n .hist-keluar {
+  font-weight: 700;
+}
 
 .hist-tabel-wrap { overflow-x: auto; }
+
+/* Info baris di modal edit mutasi */
+.med-info { margin: 0 0 4px; font-size: 13px; line-height: 1.6; }
+.med-label { color: var(--tinta-pudar); }
 
 /* ---- Tombol tambah obat baru ---- */
 .btn-obat-baru {
