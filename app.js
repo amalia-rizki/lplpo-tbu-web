@@ -396,6 +396,139 @@
     return singkat ? obat.nama_utama + " · " + singkat : (obat.nama_utama || obat.kode || "?");
   }
 
+  // ---------- Modal tambah obat baru ----------
+  // obatList: array live (akan di-push obat baru setelah simpan)
+  // onBerhasil(obatBaru): dipanggil setelah POST berhasil
+  function buatModalObatBaru(obatList, onBerhasil) {
+    var overlay = el("div", { class: "modal-overlay", role: "dialog", "aria-modal": "true", "aria-label": "Tambah obat baru" });
+
+    function tutup() { overlay.remove(); }
+
+    // Klik overlay untuk tutup
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) tutup(); });
+
+    var kotak = el("div", { class: "modal-kotak" });
+    overlay.appendChild(kotak);
+
+    kotak.appendChild(el("div", { class: "modal-judul" }, [
+      el("strong", {}, "Tambah obat baru"),
+      (function () {
+        var t = el("button", { type: "button", class: "modal-tutup", "aria-label": "Tutup" }, "✕");
+        t.addEventListener("click", tutup);
+        return t;
+      })()
+    ]));
+
+    var pesan = el("p", { class: "pesan", hidden: true });
+
+    // Form fields
+    var inpNama = el("input", { type: "text", id: "mob-nama", class: "mob-inp", placeholder: "Nama utama obat", autocomplete: "off" });
+    var inpNamaLplpo = el("input", { type: "text", id: "mob-nama-lplpo", class: "mob-inp", placeholder: "Nama resmi LPLPO (boleh kosong)", autocomplete: "off" });
+    var inpSatuan = el("input", { type: "text", id: "mob-satuan", class: "mob-inp", placeholder: "Contoh: Tab, Kapsul, Vial", autocomplete: "off" });
+    var pilKategori = el("select", { id: "mob-kategori", class: "mob-inp" }, [el("option", { value: "" }, "— Memuat kategori... —")]);
+    var inpKode = el("input", { type: "text", id: "mob-kode", class: "mob-inp", placeholder: "Kode (otomatis jika kosong)", autocomplete: "off" });
+    var chkBatch = el("input", { type: "checkbox", id: "mob-batch", checked: "checked" });
+
+    // Muat kategori
+    LPLPO.daftar("kategori", { perPage: 100, sort: "urutan" }).then(function (d) {
+      pilKategori.textContent = "";
+      pilKategori.appendChild(el("option", { value: "" }, "— Pilih kategori —"));
+      d.items.forEach(function (k) {
+        pilKategori.appendChild(el("option", { value: k.id + "|" + k.kode }, k.nama + (k.nama_singkat ? " (" + k.nama_singkat + ")" : "")));
+      });
+    });
+
+    var tombolSimpan = el("button", { type: "button", class: "btn btn-utama" }, "Simpan obat baru");
+
+    kotak.appendChild(el("div", { class: "mob-form" }, [
+      pesan,
+      el("div", { class: "field" }, [el("label", { "for": "mob-nama" }, "Nama utama *"), inpNama]),
+      el("div", { class: "field" }, [el("label", { "for": "mob-nama-lplpo" }, "Nama LPLPO"), inpNamaLplpo]),
+      el("div", { class: "field" }, [el("label", { "for": "mob-satuan" }, "Satuan *"), inpSatuan]),
+      el("div", { class: "field" }, [el("label", { "for": "mob-kategori" }, "Kategori *"), pilKategori]),
+      el("div", { class: "field" }, [el("label", { "for": "mob-kode" }, "Kode"), inpKode]),
+      el("div", { class: "field field-inline" }, [
+        el("label", { "for": "mob-batch", class: "mob-label-batch" }, [chkBatch, " Kelola per batch"])
+      ]),
+      el("div", { class: "mob-aksi" }, [tombolSimpan])
+    ]));
+
+    tombolSimpan.addEventListener("click", function () {
+      var nama = inpNama.value.trim();
+      var satuan = inpSatuan.value.trim();
+      var katVal = pilKategori.value;
+
+      if (!nama) { inpNama.focus(); return; }
+      if (!satuan) { inpSatuan.focus(); return; }
+      if (!katVal) { pilKategori.focus(); return; }
+
+      var parts = katVal.split("|");
+      var katId = parts[0];
+      var katKode = parts[1] || "";
+
+      tombolSimpan.disabled = true;
+      tombolSimpan.textContent = "Menyimpan...";
+      pesan.hidden = true;
+
+      // Generate kode jika kosong: ambil kode tertinggi dari kategori ini
+      var kodeManual = inpKode.value.trim();
+      var lanjutSimpan = function (kodeAkhir) {
+        LPLPO.buat("daftar_obat", {
+          nama_utama: nama,
+          nama_lplpo: inpNamaLplpo.value.trim() || undefined,
+          satuan: satuan,
+          kategori: katId,
+          kode: kodeAkhir,
+          aktif: true,
+          pakai_batch: chkBatch.checked
+        }).then(function (obatBaru) {
+          // Expand kategori manual agar namaObatLabel bisa baca nama_singkat
+          obatBaru.expand = obatBaru.expand || {};
+          // Tambahkan ke obatList live
+          obatList.push(obatBaru);
+          tutup();
+          onBerhasil(obatBaru);
+        }, function (err) {
+          pesan.textContent = err.pesan || "Gagal menyimpan. Cek kode duplikat.";
+          pesan.className = "pesan galat"; pesan.hidden = false;
+          tombolSimpan.disabled = false; tombolSimpan.textContent = "Simpan obat baru";
+        });
+      };
+
+      if (kodeManual) {
+        // Validasi unik
+        LPLPO.daftar("daftar_obat", { filter: 'kode = "' + kodeManual + '"', perPage: 1 }).then(function (d) {
+          if (d.items.length) {
+            pesan.textContent = "Kode " + kodeManual + " sudah dipakai.";
+            pesan.className = "pesan galat"; pesan.hidden = false;
+            tombolSimpan.disabled = false; tombolSimpan.textContent = "Simpan obat baru";
+            inpKode.focus();
+          } else {
+            lanjutSimpan(kodeManual);
+          }
+        });
+      } else {
+        // Auto-generate: ambil kode tertinggi di kategori, tambah 1
+        LPLPO.daftar("daftar_obat", { filter: 'kategori = "' + katId + '"', sort: "-kode", perPage: 1 }).then(function (d) {
+          var nextNum = 1;
+          if (d.items.length) {
+            var lastKode = d.items[0].kode || "";
+            var m = lastKode.match(/(\d+)$/);
+            if (m) nextNum = parseInt(m[1], 10) + 1;
+          }
+          var kodeGen = katKode + "-" + String(nextNum).padStart(3, "0");
+          lanjutSimpan(kodeGen);
+        });
+      }
+    });
+
+    // Esc untuk tutup
+    overlay.addEventListener("keydown", function (e) { if (e.key === "Escape") tutup(); });
+
+    document.body.appendChild(overlay);
+    setTimeout(function () { inpNama.focus(); }, 50);
+  }
+
   // ---------- Autocomplete cari obat ----------
   // onPilih(obat) dipanggil saat user memilih satu item.
   // Mengembalikan elemen wrapper yang bisa langsung dimasukkan ke DOM.
@@ -597,7 +730,19 @@
         }, 80);
       });
 
-      var panelTambah = el("div", { class: "panel pnr-tambah" }, [cariObat]);
+      var tombolObatBaru = el("button", { type: "button", class: "btn btn-garis btn-obat-baru" }, "+ Tambah obat baru");
+      tombolObatBaru.addEventListener("click", function () {
+        buatModalObatBaru(obatList, function (obatBaru) {
+          // Langsung tambahkan ke baris penerimaan
+          state.baris.push({ obatId: obatBaru.id, batchId: null, noBatch: "", ed: "", jumlah: "" });
+          gambarBaris();
+          setTimeout(function () {
+            var sels = tabelArea.querySelectorAll(".pnr-sel-batch");
+            if (sels.length) sels[sels.length - 1].focus();
+          }, 80);
+        });
+      });
+      var panelTambah = el("div", { class: "panel pnr-tambah" }, [cariObat, tombolObatBaru]);
       area.appendChild(panelTambah);
 
       // ---------- Tombol simpan ----------
