@@ -159,6 +159,7 @@
 }
 .pnr-baris:last-child { border-bottom: none; }
 .pnr-nama { flex: 2 1 180px; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnr-nonaktif { color: var(--warna-galat, #c0392b); font-style: italic; }
 .pnr-sel-batch {
   flex: 1.5 1 160px; min-width: 120px;
   height: 34px; padding: 0 8px; font-size: 14px; font-family: var(--font-form);
@@ -842,15 +843,19 @@
 
 /* Tabel dalam mode list dan mode tabel penuh */
 .hist-tabel { width: 100%; margin-top: 4px; font-size: 13px; table-layout: fixed; }
-/* Lebar kolom: Tgl=52, Unit=80, Obat=auto, Batch=84, ED=64, angka=52 each, Actions=80 */
-.hist-tabel th, .hist-tabel td { overflow: hidden; text-overflow: ellipsis; vertical-align: middle; padding: 5px 7px; }
-.hist-td-tgl  { white-space: nowrap; width: 52px; }
-.hist-td-ed   { white-space: nowrap; width: 64px; }
-.hist-td-batch { font-family: var(--font-form); font-size: 12px; width: 84px; }
-.hist-th-obat { width: auto; }
-.hist-th-aksi { width: 80px; text-align: right; }
-/* Kolom angka lebih kompak */
-.hist-tabel th.n, .hist-tabel td.n { width: 52px; }
+.hist-tabel th, .hist-tabel td { overflow: hidden; text-overflow: ellipsis; vertical-align: middle; padding: 5px 6px; white-space: nowrap; }
+/* Kolom obat boleh wrap (teks panjang) tapi jangan sampai baris baru untuk kata yg sama */
+.hist-tabel .hist-th-obat, .hist-tabel .hist-td-obat { white-space: normal; word-break: break-word; }
+/* Lebar kolom: Tgl=46, Unit=76, Obat=auto, Batch=72, ED=58, angka=48 each, Actions=72 */
+.hist-td-tgl  { width: 46px; }
+.hist-td-ed   { width: 58px; }
+.hist-td-batch { font-family: var(--font-form); font-size: 12px; width: 72px; }
+.hist-th-obat, .hist-td-obat { width: auto; min-width: 120px; }
+.hist-th-aksi { width: 72px; text-align: right; }
+/* Kolom angka: kompak dan rata kanan */
+.hist-tabel th.n, .hist-tabel td.n { width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Header angka tidak boleh terpotong */
+.hist-tabel thead th.n { overflow: visible; white-space: nowrap; }
 
 /* Nama obat di histori: kode kecil + nama terpotong */
 .hist-obat-wrap { display: flex; flex-direction: column; gap: 1px; }

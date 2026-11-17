@@ -646,7 +646,7 @@
     // Muat unit sumber (tipe = "sumber") dan daftar obat aktif paralel
     Promise.all([
       LPLPO.daftar("unit", { perPage: 100, sort: "nama", filter: 'tipe = "sumber" && aktif = true' }),
-      LPLPO.daftar("daftar_obat", { perPage: 500, sort: "kode", expand: "kategori", filter: "aktif = true" })
+      LPLPO.daftar("daftar_obat", { perPage: 500, sort: "kode", expand: "kategori" })
     ]).then(function (hasil) {
       area.textContent = "";
       var unitList  = hasil[0].items;
@@ -726,7 +726,7 @@
           }
           // Ya — tambah baris baru untuk batch kedua
         }
-        state.baris.push({ obatId: o.id, batchId: null, noBatch: "", ed: "", jumlah: "" });
+        state.baris.push({ obatId: o.id, pakaiB: !!o.pakai_batch, batchId: null, noBatch: "", ed: "", jumlah: "" });
         gambarBaris();
         // Fokus ke batch select dulu (Tab lanjut ke jumlah)
         setTimeout(function () {
@@ -739,7 +739,7 @@
       tombolObatBaru.addEventListener("click", function () {
         buatModalObatBaru(obatList, function (obatBaru) {
           // Langsung tambahkan ke baris penerimaan
-          state.baris.push({ obatId: obatBaru.id, batchId: null, noBatch: "", ed: "", jumlah: "" });
+          state.baris.push({ obatId: obatBaru.id, pakaiB: !!obatBaru.pakai_batch, batchId: null, noBatch: "", ed: "", jumlah: "" });
           gambarBaris();
           setTimeout(function () {
             var sels = tabelArea.querySelectorAll(".pnr-sel-batch");
@@ -774,20 +774,54 @@
   // batch: select dropdown (keyboard-friendly); kalau pilih "baru" muncul 2 field inline
   function buatBarisItem(b, idx, obatList, refresh) {
     var obat = obatList.filter(function (o) { return o.id === b.obatId; })[0] || {};
+    // Gunakan pakaiB dari state (sudah diset saat push), fallback ke obat.pakai_batch
+    var pakaiB = b.pakaiB !== undefined ? b.pakaiB : !!obat.pakai_batch;
+    // Tandai obat nonaktif di label
+    var labelTeks = namaObatLabel(obat) || b.obatId;
+    if (obat.aktif === false) labelTeks += " ⚠ nonaktif";
     var baris = el("div", { class: "pnr-baris" });
 
     // Nama obat (tidak bisa diedit, hanya label)
-    var labelNama = el("span", { class: "pnr-nama" }, namaObatLabel(obat) || b.obatId);
+    var labelNama = el("span", { class: "pnr-nama" + (obat.aktif === false ? " pnr-nonaktif" : "") }, labelTeks);
+
+    // Jumlah — dideklarasikan lebih awal agar bisa dirujuk dari event batch
+    var inpJumlah = el("input", {
+      type: "number", min: "1", step: "1", class: "pnr-inp-jumlah",
+      placeholder: "Jml", inputmode: "numeric", value: b.jumlah || ""
+    });
+    inpJumlah.addEventListener("input", function () { b.jumlah = inpJumlah.value; });
+    // Enter di jumlah → fokus ke cari obat berikutnya
+    inpJumlah.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        var cariInp = document.querySelector(".cari-obat-inp");
+        if (cariInp) cariInp.focus();
+      }
+    });
+
+    var satuan = el("span", { class: "pudar pnr-satuan" }, obat.satuan || "");
+    // Tombol hapus
+    var tombolHapus = el("button", { type: "button", class: "pnr-hapus", "aria-label": "Hapus " + (obat.nama_utama || "") }, "✕");
+    tombolHapus.addEventListener("click", function () { b._hapus = true; refresh(); });
+
+    if (!pakaiB) {
+      // Tanpa batch: hanya nama + jumlah
+      baris.appendChild(labelNama);
+      baris.appendChild(inpJumlah);
+      baris.appendChild(satuan);
+      baris.appendChild(tombolHapus);
+      return baris;
+    }
 
     // Dropdown batch
     var pilBatch = el("select", { class: "pnr-sel-batch", "aria-label": "Batch" });
     pilBatch.appendChild(el("option", { value: "" }, "— batch —"));
     pilBatch.appendChild(el("option", { value: "__baru__" }, "+ Batch baru"));
 
-    // Muat batch dari server — exclude yang sudah expired
+    // Muat batch dari server — tampilkan semua batch (termasuk sudah expired untuk penerimaan)
     LPLPO.daftar("batch", {
       perPage: 50, sort: "expired_date,nomor_batch",
-      filter: 'obat = "' + b.obatId + '" && (expired_date = "" || expired_date >= "' + hariIni() + '")'
+      filter: 'obat = "' + b.obatId + '"'
     }).then(function (db) {
       // Insert sebelum opsi "baru"
       var opsBaru = pilBatch.querySelector("option[value='__baru__']");
@@ -820,11 +854,31 @@
       }
     }
     inpNoBatch.addEventListener("input", function () { b.noBatch = inpNoBatch.value.toUpperCase(); inpNoBatch.value = b.noBatch; });
+    // Enter di no. batch → fokus ke bulan ED
+    inpNoBatch.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        var mmIn = inpED.el.querySelector(".tgl-mm");
+        if (mmIn) mmIn.focus();
+      }
+    });
+    var inpEDMm = inpED.el.querySelector(".tgl-mm");
+    var inpEDYy = inpED.el.querySelector(".tgl-yy");
+    // Enter di bulan ED → fokus ke tahun ED
+    if (inpEDMm) inpEDMm.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); if (inpEDYy) inpEDYy.focus(); }
+    });
+    // Enter di tahun ED → fokus ke jumlah
+    if (inpEDYy) inpEDYy.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); inpJumlah.focus(); }
+    });
     inpED.el.addEventListener("focusout", function () {
       var mm = inpED.el.querySelector(".tgl-mm").value;
       var yy = inpED.el.querySelector(".tgl-yy").value;
+      // ED boleh kosong — batch tanpa expired_date tetap valid
       if (mm && yy && yy.length === 4) b.ed = yy + "-" + mm.padStart(2,"0") + "-01";
-      else b.ed = "";
+      else if (!mm && !yy) b.ed = "";
+      // jika hanya sebagian diisi, biarkan b.ed tetap seperti sebelumnya
     });
     var formBaru = el("span", { class: "pnr-form-baru", hidden: !b._batchBaru }, [inpNoBatch, inpED.el]);
 
@@ -841,29 +895,9 @@
         for (var i = 0; i < opts.length; i++) {
           if (opts[i].value === v) { b.noBatch = opts[i].text.split(" · ")[0]; break; }
         }
+        inpJumlah.focus();
       }
     });
-
-    // Jumlah
-    var inpJumlah = el("input", {
-      type: "number", min: "1", step: "1", class: "pnr-inp-jumlah",
-      placeholder: "Jml", inputmode: "numeric", value: b.jumlah || ""
-    });
-    inpJumlah.addEventListener("input", function () { b.jumlah = inpJumlah.value; });
-    // Enter di jumlah → fokus ke cari obat berikutnya
-    inpJumlah.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        var cariInp = document.querySelector(".cari-obat-inp");
-        if (cariInp) cariInp.focus();
-      }
-    });
-
-    var satuan = el("span", { class: "pudar pnr-satuan" }, obat.satuan || "");
-
-    // Tombol hapus
-    var tombolHapus = el("button", { type: "button", class: "pnr-hapus", "aria-label": "Hapus " + (obat.nama_utama || "") }, "✕");
-    tombolHapus.addEventListener("click", function () { b._hapus = true; refresh(); });
 
     baris.appendChild(labelNama);
     baris.appendChild(pilBatch);
@@ -904,7 +938,9 @@
     state.baris = state.baris.filter(function (b) { return !b._hapus; });
 
     var valid = state.baris.filter(function (b) {
-      return b.jumlah && Number(b.jumlah) > 0 && (b.batchId || b._batchBaru);
+      // pakai_batch=false: cukup ada jumlah
+      // pakai_batch=true: harus ada batchId (existing) atau _batchBaru
+      return b.jumlah && Number(b.jumlah) > 0 && (!b.pakaiB || b.batchId || b._batchBaru);
     });
 
     if (!valid.length) {
@@ -913,7 +949,11 @@
     }
 
     var tidakLengkap = state.baris.filter(function (b) {
-      return !b._hapus && (!b.jumlah || Number(b.jumlah) < 1 || (!b.batchId && !b._batchBaru));
+      if (b._hapus) return false;
+      if (!b.jumlah || Number(b.jumlah) < 1) return true;
+      // pakai_batch=true wajib punya batch
+      if (b.pakaiB && !b.batchId && !b._batchBaru) return true;
+      return false;
     });
     if (tidakLengkap.length) {
       pesan.textContent = tidakLengkap.length + " item belum lengkap (jumlah atau batch kosong).";
@@ -987,7 +1027,7 @@
           LPLPO.buat("batch", {
             obat: b.obatId,
             nomor_batch: b.noBatch || "",
-            expired_date: b.ed || undefined,
+            expired_date: b.ed || "",
             stok_awal: 0,
             stok_sistem: Number(b.jumlah)
           }).then(function (bt) {
