@@ -3467,38 +3467,70 @@
           tdKeluar.appendChild(el("span", { class: "hist-keluar" }, formatAngka(m.jumlah)));
         }
 
+        // Helper: buat nama obat td dengan kode + nama terpotong max 30 char
+        function buatTdObat(obatE) {
+          var td = el("td", { "data-label": "Obat" });
+          if (!obatE) { td.appendChild(el("span", {}, "?")); return td; }
+          var wrap = el("span", { class: "hist-obat-wrap" });
+          if (obatE.kode) {
+            wrap.appendChild(el("span", { class: "hist-obat-kode" }, obatE.kode));
+          }
+          var nama = obatE.nama_utama || obatE.kode || "?";
+          var namaTampil = nama.length > 30 ? nama.slice(0, 30) + "…" : nama;
+          var namaEl = el("span", { class: "hist-obat-nama" }, namaTampil);
+          if (nama.length > 30) namaEl.title = nama;
+          wrap.appendChild(namaEl);
+          td.appendChild(wrap);
+          return td;
+        }
+
+        // Helper: buat td Actions (edit, hapus, opsional ℹ️ jika ada keterangan)
+        function buatTdAksi(ket) {
+          var btns = [btnEdit, btnHapus];
+          if (ket) {
+            var btnInfo = el("button", { type: "button", class: "hist-btn-info", title: ket, "aria-label": "Keterangan: " + ket });
+            btnInfo.textContent = "ℹ️";
+            btns = [btnInfo].concat(btns);
+          }
+          return el("td", { class: "hist-td-aksi" }, btns);
+        }
+
         if (modeDetail) {
-          // Mode tabel penuh: semua kolom + sisa stok batch
+          // Mode tabel penuh: semua kolom
           var batchStr = batchE ? (batchE.nomor_batch || "—") : "—";
           var edStr = batchE && batchE.expired_date ? formatED(batchE.expired_date) : "—";
           var sisaBatch = batchE && batchE.stok_sistem != null ? formatAngka(batchE.stok_sistem) : "—";
           var sisaObat = obatE && obatE.stok_sistem != null ? formatAngka(obatE.stok_sistem) : "—";
-          var tdObatDetail = el("td", { "data-label": "Obat" });
-          tdObatDetail.appendChild(namaObatEl(obatE));
+          var tdBatch = el("td", { "data-label": "Batch", class: "pudar hist-td-batch" }, batchStr);
           tbody.appendChild(el("tr", {}, [
             el("td", { "data-label": "Tgl", class: "pudar hist-td-tgl" }, formatTglPendek(m.tanggal)),
             el("td", { "data-label": "Unit", class: "pudar" }, unitE.nama || "?"),
-            tdObatDetail,
-            el("td", { "data-label": "Batch", class: "pudar" }, batchStr),
+            buatTdObat(obatE),
+            tdBatch,
             el("td", { "data-label": "ED", class: "pudar hist-td-ed" }, edStr),
             tdMasuk,
             tdKeluar,
             el("td", { "data-label": "Sisa batch", class: "n pudar" }, sisaBatch),
-            el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
-            el("td", { class: "hist-td-aksi" }, [btnEdit, btnHapus])
+            el("td", { "data-label": "Sisa obat", class: "n" }, sisaObat),
+            buatTdAksi(m.keterangan)
           ]));
         } else {
-          // Mode list (ringkas): tanggal disembunyikan (sudah ada di header), unit juga
-          var tdObatList = el("td", { "data-label": "Obat" });
-          tdObatList.appendChild(namaObatEl(obatE));
+          // Mode list (ringkas): deteksi jenis dari item, hanya tampilkan kolom Jumlah
+          var tdJumlah = el("td", { "data-label": "Jumlah", class: "n" });
+          if (jenisMasuk) {
+            tdJumlah.appendChild(el("span", { class: "hist-masuk" }, formatAngka(m.jumlah)));
+          } else {
+            tdJumlah.appendChild(el("span", { class: "hist-keluar" }, formatAngka(m.jumlah)));
+          }
+          var batchListStr = batchE ? (batchE.nomor_batch || "—") : "—";
+          var edListStr = batchE && batchE.expired_date ? formatED(batchE.expired_date) : "—";
+          var tdBatchList = el("td", { "data-label": "Batch", class: "pudar hist-td-batch" }, batchListStr);
           tbody.appendChild(el("tr", {}, [
-            tdObatList,
-            el("td", { "data-label": "Batch", class: "pudar" },
-              batchE ? (batchE.nomor_batch || "—") + (batchE.expired_date ? " · " + formatED(batchE.expired_date) : "") : "—"),
-            tdMasuk,
-            tdKeluar,
-            el("td", { "data-label": "Ket.", class: "pudar" }, m.keterangan || ""),
-            el("td", { class: "hist-td-aksi" }, [btnEdit, btnHapus])
+            buatTdObat(obatE),
+            tdBatchList,
+            el("td", { "data-label": "ED", class: "pudar hist-td-ed" }, edListStr),
+            tdJumlah,
+            buatTdAksi(m.keterangan)
           ]));
         }
       });
@@ -3506,20 +3538,21 @@
       if (modeDetail) {
         return el("table", { class: "tabel hist-tabel hist-tabel-border" }, [
           el("thead", {}, [el("tr", {}, [
-            el("th", {}, "Tgl"), el("th", {}, "Unit"), el("th", {}, "Obat"),
+            el("th", {}, "Tgl"), el("th", {}, "Unit"), el("th", { class: "hist-th-obat" }, "Obat"),
             el("th", {}, "Batch"), el("th", {}, "ED"),
             el("th", { class: "n" }, "Masuk"), el("th", { class: "n" }, "Keluar"),
             el("th", { class: "n" }, "Sisa batch"),
-            el("th", {}, "Ket."), el("th", {})
+            el("th", { class: "n" }, "Sisa obat"),
+            el("th", { class: "hist-th-aksi" }, "Actions")
           ])]),
           tbody
         ]);
       } else {
         return el("table", { class: "tabel hist-tabel hist-tabel-border" }, [
           el("thead", {}, [el("tr", {}, [
-            el("th", {}, "Obat"), el("th", {}, "Batch"),
-            el("th", { class: "n" }, "Masuk"), el("th", { class: "n" }, "Keluar"),
-            el("th", {}, "Ket."), el("th", {})
+            el("th", { class: "hist-th-obat" }, "Obat"), el("th", {}, "Batch"), el("th", {}, "ED"),
+            el("th", { class: "n" }, "Jumlah"),
+            el("th", { class: "hist-th-aksi" }, "Actions")
           ])]),
           tbody
         ]);

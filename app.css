@@ -841,10 +841,28 @@
 .hist-keluar { color: var(--tinta); font-weight: 600; font-family: var(--font-form); font-variant-numeric: tabular-nums; }
 
 /* Tabel dalam mode list dan mode tabel penuh */
-.hist-tabel { width: 100%; margin-top: 4px; font-size: 13px; }
-.hist-td-tgl { white-space: nowrap; }
-.hist-td-ed  { white-space: nowrap; min-width: 72px; }
-.hist-td-aksi { width: 32px; text-align: right; }
+.hist-tabel { width: 100%; margin-top: 4px; font-size: 13px; table-layout: fixed; }
+.hist-td-tgl  { white-space: nowrap; width: 56px; }
+.hist-td-ed   { white-space: nowrap; width: 72px; }
+.hist-td-batch { font-family: var(--font-form); font-size: 12px; width: 90px; }
+.hist-th-obat { width: auto; min-width: 160px; }
+.hist-th-aksi { width: 76px; text-align: right; }
+.hist-td-aksi { text-align: right; }
+
+/* Nama obat di histori: kode kecil + nama terpotong */
+.hist-obat-wrap { display: flex; flex-direction: column; gap: 1px; }
+.hist-obat-kode { font-size: 11px; font-family: var(--font-form); color: var(--tinta-pudar); line-height: 1.2; }
+.hist-obat-nama { font-size: 13px; line-height: 1.3; }
+
+/* Tombol info keterangan */
+.hist-btn-info {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  background: transparent; border: none; cursor: pointer;
+  border-radius: var(--radius); font-size: 14px; opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.hist-btn-info:hover { opacity: 1; }
 
 /* Tombol hapus — icon kecil, tidak mencolok */
 .hist-btn-hapus, .hist-btn-edit {
