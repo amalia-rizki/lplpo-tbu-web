@@ -709,17 +709,22 @@
       var cariObat = buatCariObat(obatList, function (o) {
         var sudahAda = state.baris.some(function (b) { return b.obatId === o.id && !b._hapus; });
         if (sudahAda) {
-          // Jika sudah ada, fokus ke jumlahnya
-          setTimeout(function () {
-            var rows = tabelArea.querySelectorAll(".pnr-baris");
-            var aktifRows = state.baris.filter(function(b){ return !b._hapus; });
-            var idx = aktifRows.findIndex(function(b){ return b.obatId === o.id; });
-            if (idx >= 0 && rows[idx]) {
-              var inp = rows[idx].querySelector(".pnr-inp-jumlah");
-              if (inp) inp.focus();
-            }
-          }, 50);
-          return;
+          // Obat sudah ada: tawarkan tambah baris baru (untuk batch berbeda) atau fokus ke baris pertama
+          var namaO = o.nama_utama || o.kode || "obat ini";
+          if (!window.confirm(namaO + " sudah ada dalam daftar.\n\nTambah baris baru untuk batch yang berbeda?")) {
+            // Tidak — fokus ke jumlah baris pertama
+            setTimeout(function () {
+              var rows = tabelArea.querySelectorAll(".pnr-baris");
+              var aktifRows = state.baris.filter(function(b){ return !b._hapus; });
+              var idx = aktifRows.findIndex(function(b){ return b.obatId === o.id; });
+              if (idx >= 0 && rows[idx]) {
+                var inp = rows[idx].querySelector(".pnr-inp-jumlah");
+                if (inp) inp.focus();
+              }
+            }, 50);
+            return;
+          }
+          // Ya — tambah baris baru untuk batch kedua
         }
         state.baris.push({ obatId: o.id, batchId: null, noBatch: "", ed: "", jumlah: "" });
         gambarBaris();
@@ -803,6 +808,17 @@
     // ED hanya mm/yyyy — sembunyikan field dd, tampilkan cuma mm + yyyy
     inpED.el.querySelector(".tgl-dd").style.display = "none";
     inpED.el.querySelector(".tgl-sep:first-of-type").style.display = "none";
+    // Restore nilai tersimpan ke DOM (penting saat gambarBaris() merender ulang)
+    if (b.noBatch) inpNoBatch.value = b.noBatch;
+    if (b.ed) {
+      var edParts = b.ed.split("-");
+      if (edParts.length >= 2) {
+        var mmEl = inpED.el.querySelector(".tgl-mm");
+        var yyEl = inpED.el.querySelector(".tgl-yy");
+        if (mmEl) mmEl.value = edParts[1];
+        if (yyEl) yyEl.value = edParts[0];
+      }
+    }
     inpNoBatch.addEventListener("input", function () { b.noBatch = inpNoBatch.value.toUpperCase(); inpNoBatch.value = b.noBatch; });
     inpED.el.addEventListener("focusout", function () {
       var mm = inpED.el.querySelector(".tgl-mm").value;
@@ -1418,6 +1434,49 @@
     var tombolBaru = el("button", { type: "button", class: "btn btn-utama" }, "Catat pengeluaran baru");
     tombolBaru.addEventListener("click", renderPengeluaran);
     area.appendChild(el("div", { class: "bilah-simpan" }, [tombolCetak, tombolHistori, tombolBaru]));
+  }
+
+  // Print tanda terima dari histori (grup mutasi per tanggal+unit)
+  function cetakTandaTerimaHistori(grup, tgl, unitObj, jenis) {
+    var tglFmt = new Date(tgl).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+    var unitNama = unitObj.nama || "-";
+    var judulDok = jenis === "masuk" ? "TANDA TERIMA PENERIMAAN OBAT" : "BUKTI PENGELUARAN OBAT";
+    var labelPihak1 = jenis === "masuk" ? "Diserahkan oleh" : "Diserahkan oleh";
+    var labelPihak2 = jenis === "masuk" ? "Diterima oleh" : "Diterima oleh";
+    var labelUnit = jenis === "masuk" ? "Sumber" : "Kepada";
+    var baris = grup.map(function (m, i) {
+      var obatE = m.expand && m.expand.obat;
+      var batchE = m.expand && m.expand.batch;
+      var namaObat = obatE ? (obatE.nama_utama || obatE.kode || "-") : (m.obat || "-");
+      var satuan = obatE ? (obatE.satuan || "") : "";
+      var noBatch = batchE ? (batchE.nomor_batch || "-") : "-";
+      var edBatch = batchE && batchE.expired_date ? formatED(batchE.expired_date) : "-";
+      return "<tr><td>" + (i + 1) + "</td><td>" + namaObat + "</td><td>" + satuan + "</td>" +
+             "<td>" + noBatch + "</td><td>" + edBatch + "</td>" +
+             "<td style='text-align:right'>" + formatAngka(m.jumlah) + "</td></tr>";
+    }).join("");
+    var html = "<!doctype html><html><head><meta charset='utf-8'><title>" + judulDok + "</title>" +
+      "<style>body{font-family:sans-serif;font-size:13px;padding:20px;max-width:700px;margin:0 auto}" +
+      "h2{margin:0 0 4px}p{margin:0 0 6px}" +
+      "table{width:100%;border-collapse:collapse;margin-top:8px}" +
+      "th,td{border:1px solid #ccc;padding:4px 8px;text-align:left}" +
+      "th{background:#f0f0f0}" +
+      ".ttd{margin-top:40px;display:flex;justify-content:space-between}" +
+      ".ttd div{text-align:center;width:200px}" +
+      "@media print{button{display:none}}</style></head><body>" +
+      "<h2>" + judulDok + "</h2>" +
+      "<p>Puskesmas Tambang Ulang</p>" +
+      "<p>Tanggal: " + tglFmt + " &nbsp;|&nbsp; " + labelUnit + ": <strong>" + unitNama + "</strong></p>" +
+      "<table><thead><tr><th>#</th><th>Nama Obat</th><th>Sat.</th><th>No. Batch</th><th>ED</th><th>Jumlah</th></tr></thead>" +
+      "<tbody>" + baris + "</tbody></table>" +
+      "<div class='ttd'>" +
+      "<div><p style='margin-top:60px'>_______________</p><p>" + labelPihak1 + "</p></div>" +
+      "<div><p style='margin-top:60px'>_______________</p><p>" + labelPihak2 + "</p></div>" +
+      "</div>" +
+      "<button onclick='window.print()' style='margin-top:20px;padding:8px 20px'>Cetak</button>" +
+      "</body></html>";
+    var w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
   }
 
   function cetakTandaTerima(hasilList, state) {
@@ -2432,6 +2491,7 @@
           el("th", {}, "Tanggal"),
           el("th", {}, "Dari / Ke"),
           el("th", {}, "Batch"),
+          el("th", {}, "ED"),
           el("th", { class: "n" }, "Masuk"),
           el("th", { class: "n" }, "Keluar"),
           el("th", { class: "n" }, "Sisa batch"),
@@ -3492,7 +3552,8 @@
             btnInfo.textContent = "ℹ️";
             btns = [btnInfo].concat(btns);
           }
-          return el("td", { class: "hist-td-aksi" }, btns);
+          var inner = el("div", { class: "hist-td-aksi-inner" }, btns);
+          return el("td", { class: "hist-td-aksi" }, [inner]);
         }
 
         if (modeDetail) {
@@ -3637,9 +3698,14 @@
             var halaman = jenis === "masuk" ? "penerimaan" : "pengeluaran";
             location.hash = "#/" + halaman + "?unit=" + encodeURIComponent(uid) + "&tgl=" + encodeURIComponent(tgl);
           });
-          var btnPrintUnit = el("button", { type: "button", class: "hist-btn-tool", title: "Print unit ini (segera hadir)", "aria-label": "Print", disabled: true });
+          var btnPrintUnit = el("button", { type: "button", class: "hist-btn-tool", title: "Cetak tanda terima", "aria-label": "Cetak" });
           btnPrintUnit.innerHTML = ikonPrintSVG;
-          btnPrintUnit.style.opacity = "0.3";
+          (function (grpSnap, tglSnap, unitSnap, jenisSnap) {
+            btnPrintUnit.addEventListener("click", function (e) {
+              e.stopPropagation();
+              cetakTandaTerimaHistori(grpSnap, tglSnap, unitSnap, jenisSnap);
+            });
+          })(grup, tgl, unitObj, jenis);
           var toolsUnit = el("div", { class: "hist-header-tools" }, [btnTambahUnit, btnPrintUnit]);
 
           var barisUnitBtn = el("button", { type: "button", class: "hist-baris-unit" }, [

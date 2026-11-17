@@ -842,21 +842,24 @@
 
 /* Tabel dalam mode list dan mode tabel penuh */
 .hist-tabel { width: 100%; margin-top: 4px; font-size: 13px; table-layout: fixed; }
-.hist-td-tgl  { white-space: nowrap; width: 56px; }
-.hist-td-ed   { white-space: nowrap; width: 72px; }
-.hist-td-batch { font-family: var(--font-form); font-size: 12px; width: 90px; }
-.hist-th-obat { width: auto; min-width: 160px; }
-.hist-th-aksi { width: 76px; text-align: right; }
-.hist-td-aksi { text-align: right; }
+/* Lebar kolom: Tgl=52, Unit=80, Obat=auto, Batch=84, ED=64, angka=52 each, Actions=80 */
+.hist-tabel th, .hist-tabel td { overflow: hidden; text-overflow: ellipsis; vertical-align: middle; padding: 5px 7px; }
+.hist-td-tgl  { white-space: nowrap; width: 52px; }
+.hist-td-ed   { white-space: nowrap; width: 64px; }
+.hist-td-batch { font-family: var(--font-form); font-size: 12px; width: 84px; }
+.hist-th-obat { width: auto; }
+.hist-th-aksi { width: 80px; text-align: right; }
+/* Kolom angka lebih kompak */
+.hist-tabel th.n, .hist-tabel td.n { width: 52px; }
 
 /* Nama obat di histori: kode kecil + nama terpotong */
 .hist-obat-wrap { display: flex; flex-direction: column; gap: 1px; }
 .hist-obat-kode { font-size: 11px; font-family: var(--font-form); color: var(--tinta-pudar); line-height: 1.2; }
-.hist-obat-nama { font-size: 13px; line-height: 1.3; }
+.hist-obat-nama { font-size: 14px; line-height: 1.3; }
 
 /* Tombol info keterangan */
 .hist-btn-info {
-  display: flex; align-items: center; justify-content: center;
+  display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; padding: 0;
   background: transparent; border: none; cursor: pointer;
   border-radius: var(--radius); font-size: 14px; opacity: 0.7;
@@ -864,9 +867,9 @@
 }
 .hist-btn-info:hover { opacity: 1; }
 
-/* Tombol hapus — icon kecil, tidak mencolok */
+/* Tombol hapus/edit — icon kecil, tidak mencolok */
 .hist-btn-hapus, .hist-btn-edit {
-  display: flex; align-items: center; justify-content: center;
+  display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; padding: 0;
   background: transparent; border: none; cursor: pointer;
   color: var(--tinta-pudar); border-radius: var(--radius);
@@ -875,7 +878,15 @@
 }
 .hist-btn-hapus:hover { color: var(--bahaya); opacity: 1; background: color-mix(in srgb, var(--bahaya) 10%, transparent); }
 .hist-btn-edit:hover { color: var(--hijau-teks); opacity: 1; background: color-mix(in srgb, var(--hijau-teks) 10%, transparent); }
-.hist-td-aksi { display: flex; align-items: center; gap: 2px; justify-content: flex-end; }
+
+/* td Actions: pakai flex untuk susun tombol, tapi tidak ada border ganda */
+.hist-td-aksi {
+  padding: 2px 4px !important;
+  vertical-align: middle;
+}
+.hist-td-aksi-inner {
+  display: flex; align-items: center; gap: 2px; justify-content: flex-end;
+}
 
 /* Border tabel histori */
 .hist-tabel-border { border-collapse: collapse; }
