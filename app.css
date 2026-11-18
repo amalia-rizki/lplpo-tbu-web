@@ -312,6 +312,8 @@
 .cari-obat-item:hover, .cari-obat-item.fokus { background: var(--hijau-muda); }
 .cari-obat-kosong { padding: 10px 12px; font-size: 15px; color: var(--tinta-pudar); }
 .cari-obat-kat { color: var(--tinta-pudar); font-size: 14px; }
+.cari-obat-nonaktif { opacity: 0.65; font-style: italic; }
+.cari-obat-toggle-nonaktif { display: inline-flex; align-items: center; font-size: 12px; color: var(--tinta-pudar); margin-top: 4px; cursor: pointer; user-select: none; }
 
 /* ---------- Master data: tab, pencarian, daftar ---------- */
 .batas-dalam { display: flex; flex-direction: column; gap: 20px; }
@@ -846,14 +848,14 @@
 .hist-tabel th, .hist-tabel td { overflow: hidden; text-overflow: ellipsis; vertical-align: middle; padding: 5px 6px; white-space: nowrap; }
 /* Kolom obat boleh wrap (teks panjang) tapi jangan sampai baris baru untuk kata yg sama */
 .hist-tabel .hist-th-obat, .hist-tabel .hist-td-obat { white-space: normal; word-break: break-word; }
-/* Lebar kolom: Tgl=46, Unit=76, Obat=auto, Batch=72, ED=58, angka=48 each, Actions=72 */
-.hist-td-tgl  { width: 46px; }
-.hist-td-ed   { width: 58px; }
-.hist-td-batch { font-family: var(--font-form); font-size: 12px; width: 72px; }
+/* Lebar kolom: Tgl=40, Batch=64, ED=50, angka=56 each, Actions=72 */
+.hist-td-tgl  { width: 40px; }
+.hist-td-ed   { width: 50px; }
+.hist-td-batch { font-family: var(--font-form); font-size: 12px; width: 64px; }
 .hist-th-obat, .hist-td-obat { width: auto; min-width: 120px; }
 .hist-th-aksi { width: 72px; text-align: right; }
-/* Kolom angka: kompak dan rata kanan */
-.hist-tabel th.n, .hist-tabel td.n { width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Kolom angka: lebih lebar agar tidak terpotong */
+.hist-tabel th.n, .hist-tabel td.n { width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
 /* Header angka tidak boleh terpotong */
 .hist-tabel thead th.n { overflow: visible; white-space: nowrap; }
 
@@ -965,6 +967,32 @@
 }
 .mob-aksi { display: flex; justify-content: flex-end; padding-top: 4px; }
 .field-inline { flex-direction: row; align-items: center; }
+
+/* ---------- Bilah simpan ---------- */
+.bilah-simpan {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap; padding-top: 8px;
+}
+.bilah-simpan .pesan { margin: 0; flex: 1 1 200px; }
+
+/* ---------- Review panel ---------- */
+.review-panel { margin-top: 16px; border: 2px solid var(--hijau-teks); }
+.review-judul { font-size: 16px; font-weight: 700; margin: 0 0 12px; }
+.review-info {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 14px; margin-bottom: 12px;
+}
+.review-tabel { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
+.review-tabel th, .review-tabel td {
+  padding: 5px 8px; border-bottom: 1px solid var(--garis);
+  text-align: left; vertical-align: middle;
+}
+.review-tabel th { font-size: 12px; color: var(--tinta-pudar); font-weight: 600; }
+.review-tabel td.n, .review-tabel th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.review-badge-nonaktif {
+  font-size: 11px; color: var(--hijau-teks);
+  font-style: normal; margin-left: 6px;
+}
 
 @media (prefers-color-scheme: dark) {
   .modal-overlay { background: rgba(0,0,0,0.6); }
