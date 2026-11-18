@@ -530,6 +530,33 @@
 /* SO: td kolom fisik — pastikan input + indikator sejajar */
 .so-td-fisik { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
 
+/* SO Tahap 1: panel per obat */
+.so-grup-obat { padding: 12px 14px; margin-bottom: 10px; }
+.so-grup-header {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.so-grup-nama { font-size: 14px; font-weight: 600; }
+.so-btn-tambah-batch { font-size: 13px; padding: 4px 10px; height: auto; white-space: nowrap; flex-shrink: 0; }
+.so-no-batch { margin: 4px 0 0; font-size: 13px; }
+/* Tabel batch dalam panel: tanpa border luar, lebih rapat */
+.so-tabel-batch { width: 100%; border-collapse: collapse; font-size: 14px; }
+.so-tabel-batch thead th {
+  font-size: 12px; font-weight: 600; text-align: left;
+  padding: 4px 6px; border-bottom: 1px solid var(--garis, #333);
+  white-space: pre-line; line-height: 1.2;
+}
+.so-tabel-batch thead th.n { text-align: right; }
+.so-tabel-batch td {
+  padding: 5px 6px; border-bottom: 1px solid var(--garis-halus, #222);
+  vertical-align: middle;
+}
+.so-tabel-batch tr:last-child td { border-bottom: none; }
+.so-tabel-batch td.n { text-align: right; }
+.so-th-fisik { text-align: right !important; }
+/* Header "Sisa\nbatch" dan "Sisa\ntotal" wrap 2 baris di tabel riwayat SO */
+.so-th-sisa { white-space: pre-line; line-height: 1.2; }
+
 /* SO: label status dan selisih wrap */
 .so-status-label { display: block; margin-bottom: 8px; font-size: 13px; }
 .so-selisih-wrap { display: flex; align-items: baseline; gap: 2px; }
