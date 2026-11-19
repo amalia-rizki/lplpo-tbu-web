@@ -1032,3 +1032,23 @@
 @media (prefers-color-scheme: dark) {
   .modal-overlay { background: rgba(0,0,0,0.6); }
 }
+
+/* ---------- Dashboard: batch expired ---------- */
+.db-expired-wrap { margin-top: 20px; }
+.db-exp-header {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  font-size: 14px; font-weight: 600; margin-bottom: 10px;
+}
+.db-exp-label { color: var(--tinta); }
+.db-exp-n {
+  width: 56px; padding: 3px 6px; text-align: center;
+  font-size: 14px; border: 1px solid var(--garis); border-radius: 6px;
+  background: var(--latar); color: var(--tinta);
+}
+.db-exp-hasil { }
+.lencana.bahaya { background: var(--koral, #e55); color: #fff; }
+.lencana.peringatan { background: #f0a000; color: #fff; }
+
+/* ---------- Pengaturan: preferensi ---------- */
+.pref-baris { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 14px; }
+.tab.tab-kecil { margin-top: 10px; margin-bottom: 6px; }

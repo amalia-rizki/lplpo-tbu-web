@@ -77,6 +77,17 @@
   }
 
   // ---------- Halaman: Dashboard ----------
+  // Helper: hitung akhir bulan dari Date
+  function akhirBulan(d) {
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  }
+
+  // Helper: selisih bulan antara dua tanggal (a - b), bisa negatif
+  function selisihBulan(tglStr, sekarang) {
+    var tgl = new Date(tglStr);
+    return (tgl.getFullYear() - sekarang.getFullYear()) * 12 + (tgl.getMonth() - sekarang.getMonth());
+  }
+
   function renderDashboard() {
     isi.textContent = "";
     isi.appendChild(judul("Dashboard", "Ringkasan data yang tersimpan di server."));
@@ -107,12 +118,87 @@
         });
         muat.replaceWith(grid);
         isi.appendChild(el("p", { class: "status-koneksi" }, "Tersambung ke " + window.LPLPO_CONFIG.API.replace("https://", "") + "."));
+
+        // Section batch mendekati expired
+        var areaBatch = el("div", { class: "db-expired-wrap" });
+        isi.appendChild(areaBatch);
+        muatDashboardExpired(areaBatch);
       },
       function (err) {
         if (err.status === 401 || err.status === 403) return keLogin();
         muat.replaceWith(tampilkanGalat(err, renderDashboard));
       }
     );
+  }
+
+  function muatDashboardExpired(area) {
+    var KUNCI_BULAN = "lplpo_expired_bulan";
+    var nBulan;
+    try { nBulan = parseInt(localStorage.getItem(KUNCI_BULAN), 10) || 3; } catch(e) { nBulan = 3; }
+
+    area.textContent = "";
+
+    var sekarang = new Date();
+    var batasAkhir = akhirBulan(new Date(sekarang.getFullYear(), sekarang.getMonth() + nBulan - 1, 1));
+    var batasStr = batasAkhir.toISOString().slice(0, 10);
+    var hariIniStr = sekarang.toISOString().slice(0, 10);
+
+    // Header section dengan kontrol N bulan
+    var lblN = el("span", { class: "db-exp-label" }, "Mendekati expired (dalam ");
+    var inpN = el("input", { type: "number", class: "db-exp-n", value: String(nBulan), min: "1", max: "24" });
+    var lblN2 = el("span", { class: "db-exp-label" }, " bulan ke depan):");
+    var hdr = el("div", { class: "db-exp-header" }, [lblN, inpN, lblN2]);
+    area.appendChild(hdr);
+
+    var areaHasil = el("div", { class: "db-exp-hasil" });
+    area.appendChild(areaHasil);
+
+    function tampilExpired() {
+      areaHasil.textContent = "";
+      areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Memuat..."));
+
+      LPLPO.daftar("batch", {
+        perPage: 500, sort: "expired_date",
+        filter: 'expired_date != "" && expired_date >= "' + hariIniStr + '" && expired_date <= "' + batasStr + '" && stok_sistem > 0',
+        expand: "obat"
+      }).then(function (d) {
+        areaHasil.textContent = "";
+        if (!d.items.length) {
+          areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Tidak ada batch yang akan expired dalam periode ini."));
+          return;
+        }
+        var kolom = [
+          { judul: "Nama obat", utama: true, isi: function (b) { return (b.expand && b.expand.obat && b.expand.obat.nama_utama) || b.obat; } },
+          { judul: "Batch", isi: function (b) { return b.nomor_batch || "(tanpa batch)"; } },
+          { judul: "ED", isi: function (b) { return formatED(b.expired_date); } },
+          { judul: "Bulan tersisa", angka: true, isi: function (b) {
+            var sb = selisihBulan(b.expired_date, sekarang);
+            if (sb < 0) return el("span", { class: "lencana bahaya" }, "Lewat");
+            if (sb === 0) return el("span", { class: "lencana peringatan" }, "Bulan ini");
+            return el("span", { class: sb <= 1 ? "lencana peringatan" : "lencana netral" }, sb + " bln");
+          }},
+          { judul: "Stok", angka: true, isi: function (b) { return formatAngka(b.stok_sistem); } }
+        ];
+        areaHasil.appendChild(buatTabel(kolom, d.items));
+      }, function (err) {
+        areaHasil.textContent = "";
+        areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Gagal memuat: " + (err.pesan || err.message || "")));
+      });
+    }
+
+    inpN.addEventListener("change", function () {
+      var v = parseInt(inpN.value, 10);
+      if (!v || v < 1) v = 1;
+      if (v > 24) v = 24;
+      inpN.value = v;
+      nBulan = v;
+      try { localStorage.setItem(KUNCI_BULAN, String(v)); } catch(e) {}
+      batasAkhir = akhirBulan(new Date(sekarang.getFullYear(), sekarang.getMonth() + nBulan - 1, 1));
+      batasStr = batasAkhir.toISOString().slice(0, 10);
+      tampilExpired();
+    });
+
+    tampilExpired();
   }
 
   // ---------- Halaman: Master data (hanya baca) ----------
@@ -4210,6 +4296,173 @@
     muat();
   }
 
+  // ---------- Halaman: Pengaturan ----------
+  function tabPengaturan(aktif) {
+    var nav = el("nav", { class: "tab", "aria-label": "Pengaturan" });
+    [["umum", "Umum"], ["master", "Master data"]].forEach(function (t) {
+      var a = el("a", { href: "#/pengaturan/" + t[0] }, t[1]);
+      if (t[0] === aktif) a.setAttribute("aria-current", "page");
+      nav.appendChild(a);
+    });
+    return nav;
+  }
+
+  function renderPengaturan(sub) {
+    if (!sub || sub === "") sub = "umum";
+    isi.textContent = "";
+    isi.appendChild(judul("Pengaturan", "Konfigurasi aplikasi dan pengelolaan master data."));
+    // Tab utama: highlight "master" jika sub adalah master atau master/xxx
+    var tabAktif = sub === "umum" ? "umum" : "master";
+    isi.appendChild(tabPengaturan(tabAktif));
+    var area = el("div", { class: "batas-dalam" });
+    isi.appendChild(area);
+    if (sub === "master") {
+      renderMasterDiArea(area, "obat");
+    } else if (sub.indexOf("master/") === 0) {
+      var subSub = sub.slice("master/".length);
+      renderMasterDiArea(area, subSub);
+    } else {
+      renderPengaturanUmum(area);
+    }
+  }
+
+  function renderPengaturanUmum(area) {
+    // Panel Recalc global
+    var panelRecalc = el("section", { class: "panel" });
+    panelRecalc.appendChild(el("h2", { style: "margin-top:0" }, "Recalculate stok sistem"));
+    panelRecalc.appendChild(el("p", {}, "Hitung ulang stok_sistem semua batch dan daftar_obat dari data mutasi yang tersimpan. Gunakan jika stok tampak tidak sinkron."));
+
+    var tombolRecalc = el("button", { type: "button", class: "btn btn-primer" }, "Recalculate semua stok");
+    var statusRecalc = el("p", { class: "status-koneksi", style: "margin-top:10px" }, "");
+    panelRecalc.appendChild(tombolRecalc);
+    panelRecalc.appendChild(statusRecalc);
+    area.appendChild(panelRecalc);
+
+    tombolRecalc.addEventListener("click", function () {
+      tombolRecalc.disabled = true;
+      statusRecalc.textContent = "Memulai recalculate...";
+      jalankanRecalcGlobal(statusRecalc, function () {
+        tombolRecalc.disabled = false;
+      });
+    });
+
+    // Panel pengaturan tampilan
+    var KUNCI_BULAN = "lplpo_expired_bulan";
+    var nBulan;
+    try { nBulan = parseInt(localStorage.getItem(KUNCI_BULAN), 10) || 3; } catch(e) { nBulan = 3; }
+
+    var panelTampilan = el("section", { class: "panel", style: "margin-top:16px" });
+    panelTampilan.appendChild(el("h2", { style: "margin-top:0" }, "Preferensi tampilan"));
+
+    var lblBulan = el("label", { "for": "pref-bulan" }, "Tampilkan batch expired dalam ");
+    var inpBulan = el("input", { type: "number", id: "pref-bulan", class: "db-exp-n", value: String(nBulan), min: "1", max: "24" });
+    var lblBulan2 = el("span", {}, " bulan ke depan (di Dashboard)");
+    var barisBulan = el("div", { class: "pref-baris", style: "margin-top:10px" }, [lblBulan, inpBulan, lblBulan2]);
+    var simpanTampilan = el("button", { type: "button", class: "btn btn-garis", style: "margin-top:10px" }, "Simpan");
+    var statusTampilan = el("span", { class: "status-koneksi", style: "margin-left:10px" }, "");
+    panelTampilan.appendChild(barisBulan);
+    panelTampilan.appendChild(el("div", {}, [simpanTampilan, statusTampilan]));
+    area.appendChild(panelTampilan);
+
+    simpanTampilan.addEventListener("click", function () {
+      var v = parseInt(inpBulan.value, 10);
+      if (!v || v < 1) v = 1;
+      if (v > 24) v = 24;
+      inpBulan.value = v;
+      try { localStorage.setItem(KUNCI_BULAN, String(v)); } catch(e) {}
+      statusTampilan.textContent = "Tersimpan.";
+      setTimeout(function () { statusTampilan.textContent = ""; }, 2000);
+    });
+  }
+
+  // Recalc global: batch → daftar_obat
+  function jalankanRecalcGlobal(statusEl, selesai) {
+    var log = [];
+    function tulis(t) { statusEl.textContent = t; log.push(t); }
+
+    tulis("Mengambil semua batch...");
+    LPLPO.daftar("batch", { perPage: 2000, sort: "id" }).then(function (db) {
+      var semuaBatch = db.items;
+      tulis("Mengambil semua mutasi...");
+      return LPLPO.daftar("mutasi", { perPage: 2000, sort: "tanggal" }).then(function (dm) {
+        return { batch: semuaBatch, mutasi: dm.items };
+      });
+    }).then(function (dat) {
+      var mutasiPerBatch = {};
+      dat.mutasi.forEach(function (m) {
+        if (!m.batch) return;
+        if (!mutasiPerBatch[m.batch]) mutasiPerBatch[m.batch] = [];
+        mutasiPerBatch[m.batch].push(m);
+      });
+
+      var stokObat = {};
+      var antrian = dat.batch.map(function (bt) {
+        return function () {
+          var txList = mutasiPerBatch[bt.id] || [];
+          var delta = 0;
+          txList.forEach(function (m) {
+            if (m.jenis === "masuk") delta += m.jumlah;
+            else if (m.jenis === "keluar") delta -= m.jumlah;
+          });
+          var stokBaru = (bt.stok_awal || 0) + delta;
+          if (!stokObat[bt.obat]) stokObat[bt.obat] = 0;
+          stokObat[bt.obat] += stokBaru;
+          if (Math.abs(stokBaru - bt.stok_sistem) < 0.001) return Promise.resolve();
+          return LPLPO.ubah("batch", bt.id, { stok_sistem: stokBaru });
+        };
+      });
+
+      tulis("Mengupdate " + dat.batch.length + " batch...");
+      return antrianSeri(antrian).then(function () {
+        return stokObat;
+      });
+    }).then(function (stokObat) {
+      tulis("Mengambil daftar obat...");
+      return LPLPO.daftar("daftar_obat", { perPage: 2000, sort: "id" }).then(function (dd) {
+        var antrianObat = dd.items.map(function (ob) {
+          return function () {
+            var stokBaru = stokObat[ob.id] || 0;
+            if (Math.abs(stokBaru - ob.stok_sistem) < 0.001) return Promise.resolve();
+            return LPLPO.ubah("daftar_obat", ob.id, { stok_sistem: stokBaru });
+          };
+        });
+        tulis("Mengupdate " + dd.items.length + " obat...");
+        return antrianSeri(antrianObat);
+      });
+    }).then(function () {
+      tulis("Selesai. Stok sistem semua batch dan obat sudah diperbarui.");
+      selesai();
+    }, function (err) {
+      tulis("Error: " + (err.pesan || err.message || "Gagal recalculate."));
+      selesai();
+    });
+  }
+
+  // Jalankan array fungsi () => Promise satu per satu
+  function antrianSeri(arr) {
+    return arr.reduce(function (p, fn) { return p.then(fn); }, Promise.resolve());
+  }
+
+  // Master data di halaman pengaturan (tab)
+  function tabMasterPengaturan(aktif) {
+    var nav = el("nav", { class: "tab tab-kecil", "aria-label": "Jenis data" });
+    [["obat", "Obat"], ["unit", "Unit"], ["kategori", "Kategori"]].forEach(function (t) {
+      var a = el("a", { href: "#/pengaturan/master/" + t[0] }, t[1]);
+      if (t[0] === aktif) a.setAttribute("aria-current", "page");
+      nav.appendChild(a);
+    });
+    return nav;
+  }
+
+  function renderMasterDiArea(area, sub) {
+    var bagian = { obat: daftarObat, unit: daftarUnit, kategori: daftarKategori };
+    if (!bagian[sub]) sub = "obat";
+    area.appendChild(tabMasterPengaturan(sub));
+    var konten = el("div", {});
+    area.appendChild(konten);
+    bagian[sub](konten);
+  }
+
   // ---------- Halaman yang belum dibuat ----------
   function halamanBelumAda(h) {
     return function () {
@@ -4222,18 +4475,20 @@
   }
 
   var DAFTAR_HALAMAN = [
-    { id: "dashboard",   menu: "Dashboard",      judul: "Dashboard",           render: renderDashboard },
-    { id: "penerimaan",  menu: "Penerimaan",      judul: "Penerimaan obat",     render: renderPenerimaan },
-    { id: "pengeluaran", menu: "Pengeluaran",     judul: "Pengeluaran obat",    render: renderPengeluaran },
-    { id: "histori",     menu: "Histori mutasi",  judul: "Histori mutasi",      render: renderHistori },
-    { id: "permintaan",  menu: "Permintaan",      judul: "Permintaan dari unit", info: "Periksa permintaan unit, lalu ubah menjadi pengeluaran." },
-    { id: "stockopname", menu: "Stockopname",     judul: "Stockopname",         render: renderStockopname },
-    { id: "kartu-stok",  menu: "Kartu stok",      judul: "Kartu stok",          render: renderKartuStok },
-    { id: "stok",        menu: "Stok dan batch",  judul: "Stok dan batch",      info: "Stok per batch dengan penanda ED." },
-    { id: "laporan",     menu: "Laporan LPLPO",   judul: "Laporan LPLPO",       info: "Susun laporan bulanan dan ekspor ke Excel." },
-    { id: "master",      menu: "Master data",     judul: "Master data",         render: renderMaster },
-    { id: "pengaturan",  menu: "Pengaturan",      judul: "Pengaturan",          info: "Preferensi tampilan, profil, dan konfigurasi aplikasi." }
+    { id: "dashboard",   menu: "Dashboard",       judul: "Dashboard",            render: renderDashboard },
+    { id: "penerimaan",  menu: "Penerimaan",       judul: "Penerimaan obat",      render: renderPenerimaan },
+    { id: "pengeluaran", menu: "Pengeluaran",      judul: "Pengeluaran obat",     render: renderPengeluaran },
+    { id: "histori",     menu: "Histori mutasi",   judul: "Histori mutasi",       render: renderHistori },
+    { id: "permintaan",  menu: "Permintaan",       judul: "Permintaan dari unit", info: "Periksa permintaan unit, lalu ubah menjadi pengeluaran." },
+    { id: "stockopname", menu: "Stockopname",      judul: "Stockopname",          render: renderStockopname },
+    { id: "kartu-stok",  menu: "Kartu stok",       judul: "Kartu stok",           render: renderKartuStok },
+    { id: "stok",        menu: "Stok dan batch",   judul: "Stok dan batch",       info: "Stok per batch dengan penanda ED." },
+    { id: "laporan",     menu: "Laporan LPLPO",    judul: "Laporan LPLPO",        info: "Susun laporan bulanan dan ekspor ke Excel." },
+    { id: "pengaturan",  menu: "Pengaturan",       judul: "Pengaturan",           render: renderPengaturan }
   ];
+
+  // Routing khusus: #/pengaturan/master/obat → sub = "master/obat"
+  // Sudah ditangani oleh renderPengaturan via bagian[1] "/" bagian[2]
 
   DAFTAR_HALAMAN.forEach(function (h) {
     if (!h.render) h.render = halamanBelumAda(h);
@@ -4244,12 +4499,15 @@
     menu.appendChild(el("a", { href: "#/" + h.id, "data-id": h.id }, h.menu));
   });
 
-  // Alamat #/master/unit dibaca sebagai halaman "master" dengan bagian "unit".
+  // Alamat #/pengaturan/master/obat dibaca sebagai halaman "pengaturan" dengan sub "master/obat".
   function halamanAktif() {
-    var bagian = (location.hash || "").replace(/^#\//, "").split("/");
+    var raw = (location.hash || "").replace(/^#\//, "");
+    var bagian = raw.split("/");
     var idBagian = bagian[0].split("?")[0]; // strip query string
     var h = DAFTAR_HALAMAN.filter(function (x) { return x.id === idBagian; })[0] || DAFTAR_HALAMAN[0];
-    return { h: h, sub: bagian[1] || "" };
+    // Gabungkan sisa bagian sebagai sub (mendukung sub bertingkat seperti "master/obat")
+    var sub = bagian.slice(1).join("/") || "";
+    return { h: h, sub: sub };
   }
 
   function tampilkanHalaman() {
