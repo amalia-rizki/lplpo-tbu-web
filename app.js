@@ -2607,7 +2607,7 @@
         var parts = tgl.slice(0, 10).split("-");
         var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10) - 1;
         var akhir = new Date(y, m + 1, 0);
-        return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0");
+        return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0") + " 23:59:59";
       })(soTanggal);
 
       // Kelompokkan batch per obat
@@ -2846,7 +2846,7 @@
       var d = new Date(tgl);
       if (isNaN(d)) return tgl;
       var akhir = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0");
+      return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0") + " 23:59:59";
     })(soTanggal);
 
     var filterMutasi = 'obat = "' + obatId + '" && status = "confirmed" && tanggal <= "' + cutoff + '"';
