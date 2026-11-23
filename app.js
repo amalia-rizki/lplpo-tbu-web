@@ -513,8 +513,6 @@
     var inpSatuan = el("input", { type: "text", id: "mob-satuan", class: "mob-inp", placeholder: "Contoh: Tab, Kapsul, Vial", autocomplete: "off" });
     var pilKategori = el("select", { id: "mob-kategori", class: "mob-inp" }, [el("option", { value: "" }, "— Memuat kategori... —")]);
     var inpKode = el("input", { type: "text", id: "mob-kode", class: "mob-inp", placeholder: "Kode (otomatis jika kosong)", autocomplete: "off" });
-    var chkBatch = el("input", { type: "checkbox", id: "mob-batch", checked: "checked" });
-
     // Muat kategori
     LPLPO.daftar("kategori", { perPage: 100, sort: "urutan" }).then(function (d) {
       pilKategori.textContent = "";
@@ -533,9 +531,6 @@
       el("div", { class: "field" }, [el("label", { "for": "mob-satuan" }, "Satuan *"), inpSatuan]),
       el("div", { class: "field" }, [el("label", { "for": "mob-kategori" }, "Kategori *"), pilKategori]),
       el("div", { class: "field" }, [el("label", { "for": "mob-kode" }, "Kode"), inpKode]),
-      el("div", { class: "field field-inline" }, [
-        el("label", { "for": "mob-batch", class: "mob-label-batch" }, [chkBatch, " Kelola per batch"])
-      ]),
       el("div", { class: "mob-aksi" }, [tombolSimpan])
     ]));
 
@@ -566,7 +561,7 @@
           kategori: katId,
           kode: kodeAkhir,
           aktif: true,
-          pakai_batch: chkBatch.checked
+          pakai_batch: true // default: pilih batch FEFO; "Tanpa batch" selalu tersedia di dropdown
         }).then(function (obatBaru) {
           // Expand kategori manual agar namaObatLabel bisa baca nama_singkat
           obatBaru.expand = obatBaru.expand || {};
@@ -856,7 +851,7 @@
           }
           // Ya — tambah baris baru untuk batch kedua
         }
-        state.baris.push({ obatId: o.id, pakaiB: !!o.pakai_batch, batchId: null, noBatch: "", ed: "", jumlah: "" });
+        state.baris.push({ obatId: o.id, tanpaBatch: !o.pakai_batch, batchId: null, noBatch: "", ed: "", jumlah: "" });
         gambarBaris();
         // Fokus ke batch select dulu (Tab lanjut ke jumlah)
         setTimeout(function () {
@@ -869,7 +864,7 @@
       tombolObatBaru.addEventListener("click", function () {
         buatModalObatBaru(obatList, function (obatBaru) {
           // Langsung tambahkan ke baris penerimaan
-          state.baris.push({ obatId: obatBaru.id, pakaiB: !!obatBaru.pakai_batch, batchId: null, noBatch: "", ed: "", jumlah: "" });
+          state.baris.push({ obatId: obatBaru.id, tanpaBatch: !obatBaru.pakai_batch, batchId: null, noBatch: "", ed: "", jumlah: "" });
           gambarBaris();
           setTimeout(function () {
             var sels = tabelArea.querySelectorAll(".pnr-sel-batch");
@@ -916,8 +911,8 @@
   // batch: select dropdown (keyboard-friendly); kalau pilih "baru" muncul 2 field inline
   function buatBarisItem(b, idx, obatList, refresh) {
     var obat = obatList.filter(function (o) { return o.id === b.obatId; })[0] || {};
-    // Gunakan pakaiB dari state (sudah diset saat push), fallback ke obat.pakai_batch
-    var pakaiB = b.pakaiB !== undefined ? b.pakaiB : !!obat.pakai_batch;
+    // Default "Tanpa batch" untuk obat yang tidak dikelola per batch (diset saat baris dibuat)
+    if (b.tanpaBatch === undefined) b.tanpaBatch = !obat.pakai_batch;
     // Tandai obat nonaktif di label
     var labelTeks = namaObatLabel(obat) || b.obatId;
     if (obat.aktif === false) labelTeks += " ⚠ nonaktif";
@@ -946,40 +941,35 @@
     var tombolHapus = el("button", { type: "button", class: "pnr-hapus", "aria-label": "Hapus " + (obat.nama_utama || "") }, "✕");
     tombolHapus.addEventListener("click", function () { b._hapus = true; refresh(); });
 
-    if (!pakaiB) {
-      // Tanpa batch: hanya nama + jumlah
-      baris.appendChild(labelNama);
-      baris.appendChild(inpJumlah);
-      baris.appendChild(satuan);
-      baris.appendChild(tombolHapus);
-      return baris;
-    }
-
-    // Dropdown batch
+    // Dropdown batch (selalu ada; "Tanpa batch" tersedia untuk semua obat)
     var pilBatch = el("select", { class: "pnr-sel-batch", "aria-label": "Batch" });
     pilBatch.appendChild(el("option", { value: "" }, "— batch —"));
+    pilBatch.appendChild(el("option", { value: OPSI_TANPA_BATCH }, "Tanpa batch"));
     pilBatch.appendChild(el("option", { value: "__baru__" }, "+ Batch baru"));
+    // Pilihan awal sebelum daftar batch termuat
+    if (b._batchBaru) pilBatch.value = "__baru__";
+    else if (b.tanpaBatch) pilBatch.value = OPSI_TANPA_BATCH;
 
     // Muat batch dari server — tampilkan semua batch (termasuk sudah expired untuk penerimaan)
-    LPLPO.daftar("batch", {
-      perPage: 50, sort: "expired_date,nomor_batch",
+    daftarSemua("batch", {
+      perPage: 200, sort: "expired_date,nomor_batch",
       filter: 'obat = "' + b.obatId + '"'
     }).then(function (db) {
-      // Insert sebelum opsi "baru"
-      var opsBaru = pilBatch.querySelector("option[value='__baru__']");
+      // Insert sebelum opsi "Tanpa batch"
+      var opsTanpa = pilBatch.querySelector("option[value='" + OPSI_TANPA_BATCH + "']");
       db.items.forEach(function (bt) {
         var stok = bt.stok_sistem !== undefined && bt.stok_sistem !== null ? bt.stok_sistem : "?";
-        var label = (bt.nomor_batch || "tanpa nomor") + (bt.expired_date ? " · " + formatED(bt.expired_date) : "") + " [stok " + stok + "]";
-        var opt = el("option", { value: bt.id }, label);
-        pilBatch.insertBefore(opt, opsBaru);
+        var opt = el("option", { value: bt.id }, labelBatch(bt) + " [stok " + stok + "]");
+        pilBatch.insertBefore(opt, opsTanpa);
       });
       // Restore pilihan sebelumnya
       if (b.batchId) pilBatch.value = b.batchId;
       else if (b._batchBaru) pilBatch.value = "__baru__";
+      else if (b.tanpaBatch) pilBatch.value = OPSI_TANPA_BATCH;
     });
 
     // Field batch baru (muncul kalau pilih "+ Batch baru")
-    var inpNoBatch = el("input", { type: "text", class: "pnr-inp-sm", placeholder: "No. batch", autocomplete: "off", style: "text-transform:uppercase;width:9ch" });
+    var inpNoBatch = el("input", { type: "text", class: "pnr-inp-sm", placeholder: "No. batch (boleh kosong)", autocomplete: "off", style: "text-transform:uppercase;width:12ch" });
     var inpED = buatInputTanggal("", function(){}, { kelas: "pnr-inp-sm pnr-inp-ed-tgl", label: "Expired" });
     // ED hanya mm/yyyy — sembunyikan field dd, tampilkan cuma mm + yyyy
     inpED.el.querySelector(".tgl-dd").style.display = "none";
@@ -1027,15 +1017,20 @@
     pilBatch.addEventListener("change", function () {
       var v = pilBatch.value;
       if (v === "__baru__") {
-        b.batchId = null; b._batchBaru = true;
+        b.batchId = null; b._batchBaru = true; b.tanpaBatch = false;
         formBaru.hidden = false; inpNoBatch.focus();
       } else {
-        b.batchId = v || null; b._batchBaru = false;
+        var adaBatch = !!v && v !== OPSI_TANPA_BATCH;
+        b.batchId = adaBatch ? v : null;
+        b.tanpaBatch = (v === OPSI_TANPA_BATCH);
+        b._batchBaru = false;
         formBaru.hidden = true;
-        // Ambil data batch terpilih
-        var opts = pilBatch.options;
-        for (var i = 0; i < opts.length; i++) {
-          if (opts[i].value === v) { b.noBatch = opts[i].text.split(" · ")[0]; break; }
+        // Ambil data batch terpilih (untuk label review)
+        if (adaBatch) {
+          var opts = pilBatch.options;
+          for (var i = 0; i < opts.length; i++) {
+            if (opts[i].value === v) { b.noBatch = opts[i].text.replace(/ \[stok .*\]$/, ""); break; }
+          }
         }
         inpJumlah.focus();
       }
@@ -1048,6 +1043,14 @@
     baris.appendChild(satuan);
     baris.appendChild(tombolHapus);
     return baris;
+  }
+
+  // Batch pada baris penerimaan sudah lengkap? (pilih batch ada, "Tanpa batch",
+  // atau batch baru dengan nomor atau ED terisi — nomor boleh kosong asal ada ED)
+  function penerimaanBatchOk(b) {
+    if (b.tanpaBatch || b.batchId) return true;
+    if (b._batchBaru) return !!(String(b.noBatch || "").trim() || b.ed);
+    return false;
   }
 
   // Helper: update stok_sistem di daftar_obat dengan delta (+ masuk, - keluar)
@@ -1079,7 +1082,7 @@
     }
     var aktif = state.baris.filter(function (b) { return !b._hapus; });
     var valid = aktif.filter(function (b) {
-      return b.jumlah && Number(b.jumlah) > 0 && (!b.pakaiB || b.batchId || b._batchBaru);
+      return b.jumlah && Number(b.jumlah) > 0 && penerimaanBatchOk(b);
     });
     if (!valid.length) {
       pesanLama.textContent = "Tambahkan minimal satu item dengan jumlah.";
@@ -1087,7 +1090,7 @@
     }
     var tidakLengkap = aktif.filter(function (b) {
       if (!b.jumlah || Number(b.jumlah) < 1) return true;
-      if (b.pakaiB && !b.batchId && !b._batchBaru) return true;
+      if (!penerimaanBatchOk(b)) return true;
       return false;
     });
     if (tidakLengkap.length) {
@@ -1112,11 +1115,11 @@
     var tbody = el("tbody");
     valid.forEach(function (b, i) {
       var obat = obatList.filter(function (o) { return o.id === b.obatId; })[0] || {};
-      var batchLabel = "";
-      if (b.pakaiB) {
-        batchLabel = b._batchBaru
-          ? (b.noBatch || "tanpa nomor") + (b.ed ? " · " + formatED(b.ed) : "")
-          : (b.noBatch || "batch ada");
+      var batchLabel = "Tanpa batch";
+      if (b._batchBaru) {
+        batchLabel = labelBatch({ nomor_batch: b.noBatch, expired_date: b.ed }) + " (baru)";
+      } else if (b.batchId) {
+        batchLabel = b.noBatch || "batch ada";
       }
       var nonaktifBadge = obat.aktif === false ? el("span", { class: "review-badge-nonaktif" }, " → akan diaktifkan") : null;
       var namaTd = el("td", {});
@@ -1178,7 +1181,7 @@
     var valid = state.baris.filter(function (b) {
       // pakai_batch=false: cukup ada jumlah
       // pakai_batch=true: harus ada batchId (existing) atau _batchBaru
-      return b.jumlah && Number(b.jumlah) > 0 && (!b.pakaiB || b.batchId || b._batchBaru);
+      return b.jumlah && Number(b.jumlah) > 0 && penerimaanBatchOk(b);
     });
 
     if (!valid.length) {
@@ -1190,7 +1193,7 @@
       if (b._hapus) return false;
       if (!b.jumlah || Number(b.jumlah) < 1) return true;
       // pakai_batch=true wajib punya batch
-      if (b.pakaiB && !b.batchId && !b._batchBaru) return true;
+      if (!penerimaanBatchOk(b)) return true;
       return false;
     });
     if (tidakLengkap.length) {
@@ -1219,8 +1222,10 @@
         : Promise.resolve();
 
       // Proses satu per satu (tidak paralel, agar mudah debug)
-      var antrian = valid.slice();
-      var hasil = [];
+      // Guard retry: baris yang mutasinya sudah tersimpan (_tersimpan) tidak disimpan ulang,
+      // supaya klik ulang setelah gagal di tengah jalan tidak membuat mutasi duplikat.
+      var antrian = valid.filter(function (b) { return !b._tersimpan; });
+      var hasil = state._hasil = state._hasil || [];
 
       function prosesBerikutnya() {
         if (!antrian.length) {
@@ -1247,6 +1252,7 @@
             status: "confirmed",
             catatan: ""
           }).then(function () {
+            b._tersimpan = true; // mutasi sudah masuk; jangan disimpan lagi bila ada retry
             // Update stok_sistem di batch, lalu di daftar_obat
             var pStok;
             if (batchId) {
@@ -1285,14 +1291,25 @@
         }
 
         if (b._batchBaru) {
-          // Buat batch baru dulu
-          LPLPO.buat("batch", {
-            obat: b.obatId,
-            nomor_batch: b.noBatch || "",
-            expired_date: b.ed || "",
-            stok_awal: 0,
-            stok_sistem: 0
+          // Pakai ulang batch yang sama (obat + nomor + ED bulan sama), kalau belum ada baru dibuat.
+          // Nomor kosong dengan ED terisi = batch "tanpa nomor" yang sah.
+          var noB = String(b.noBatch || "").trim().toUpperCase();
+          daftarSemua("batch", { perPage: 200, filter: 'obat = "' + b.obatId + '"' }).then(function (dbAda) {
+            var ada = dbAda.items.filter(function (x) {
+              return String(x.nomor_batch || "").trim().toUpperCase() === noB &&
+                     kunciED(x.expired_date) === kunciED(b.ed);
+            })[0];
+            if (ada) return ada;
+            return LPLPO.buat("batch", {
+              obat: b.obatId,
+              nomor_batch: noB,
+              expired_date: b.ed || "",
+              stok_awal: 0,
+              stok_sistem: 0
+            });
           }).then(function (bt) {
+            b.batchId = bt.id; b._batchBaru = false; // retry memakai batch ini, tidak bikin lagi
+            b.noBatch = labelBatch(bt);
             buatMutasi(bt.id);
           }, function (err) {
             pesan.textContent = "Gagal membuat batch untuk " + (obat.nama_utama || "") + ": " + (err.pesan || "");
@@ -1432,25 +1449,14 @@
           tabelArea.appendChild(el("p", { class: "status-koneksi" }, "Belum ada item."));
         } else {
           state.baris.forEach(function (b, idx) {
-            tabelArea.appendChild(buatBarisKeluarItem(b, idx, obatList, gambarBaris));
+            tabelArea.appendChild(buatBarisKeluarItem(b, idx, obatList, gambarBaris, state));
           });
         }
       }
 
       var cariObatPgl = buatCariObat(obatList, function (o) {
-        var sudahAda = state.baris.some(function (b) { return b.obatId === o.id && !b._hapus; });
-        if (sudahAda) {
-          setTimeout(function () {
-            var rows = tabelArea.querySelectorAll(".pnr-baris");
-            var aktifRows = state.baris.filter(function(b){ return !b._hapus; });
-            var idx = aktifRows.findIndex(function(b){ return b.obatId === o.id; });
-            if (idx >= 0 && rows[idx]) {
-              var inp = rows[idx].querySelector(".pnr-inp-jumlah");
-              if (inp) inp.focus();
-            }
-          }, 50);
-          return;
-        }
+        // Obat yang sama boleh punya beberapa baris (batch berbeda); batch otomatis
+        // memilih FEFO berikutnya yang belum dipakai baris lain.
         state.baris.push({ obatId: o.id, batchId: null, jumlah: "" });
         gambarBaris();
         // Fokus ke batch select (FEFO sudah auto-pilih, Tab ke jumlah)
@@ -1488,14 +1494,14 @@
     }
     var aktif = state.baris.filter(function (b) { return !b._hapus; });
     var valid = aktif.filter(function (b) {
-      return b.jumlah && Number(b.jumlah) > 0 && b.batchId;
+      return b.jumlah && Number(b.jumlah) > 0 && (b.batchId || b.tanpaBatch);
     });
     if (!valid.length) {
       pesanLama.textContent = "Tambahkan minimal satu item dengan jumlah dan batch.";
       pesanLama.className = "pesan galat"; pesanLama.hidden = false; return;
     }
     var tidakLengkap = aktif.filter(function (b) {
-      return !b.jumlah || Number(b.jumlah) < 1 || !b.batchId;
+      return !b.jumlah || Number(b.jumlah) < 1 || (!b.batchId && !b.tanpaBatch);
     });
     if (tidakLengkap.length) {
       pesanLama.textContent = tidakLengkap.length + " item belum lengkap.";
@@ -1516,7 +1522,7 @@
     var tbody = el("tbody");
     valid.forEach(function (b, i) {
       var obat = obatList.filter(function (o) { return o.id === b.obatId; })[0] || {};
-      var batchLabel = b.batchNomor || b.batchId || "";
+      var batchLabel = b.tanpaBatch ? "Tanpa batch" : (b.batchNomor || b.batchId || "");
       tbody.appendChild(el("tr", {}, [
         el("td", { class: "pudar", style: "font-size:12px;padding-right:4px" }, String(i + 1)),
         el("td", {}, obat.nama_utama || b.obatId),
@@ -1597,25 +1603,13 @@
         tabelArea.appendChild(el("p", { class: "status-koneksi" }, "Belum ada item."));
       } else {
         state.baris.forEach(function (b, idx) {
-          tabelArea.appendChild(buatBarisKeluarItem(b, idx, obatList, gambarBaris));
+          tabelArea.appendChild(buatBarisKeluarItem(b, idx, obatList, gambarBaris, state));
         });
       }
     }
 
     var cariObatDp = buatCariObat(obatList, function (o) {
-      var sudahAda = state.baris.some(function (b) { return b.obatId === o.id && !b._hapus; });
-      if (sudahAda) {
-        setTimeout(function () {
-          var rows = tabelArea.querySelectorAll(".pnr-baris");
-          var aktifRows = state.baris.filter(function(b){ return !b._hapus; });
-          var idx = aktifRows.findIndex(function(b){ return b.obatId === o.id; });
-          if (idx >= 0 && rows[idx]) {
-            var inp = rows[idx].querySelector(".pnr-inp-jumlah");
-            if (inp) inp.focus();
-          }
-        }, 50);
-        return;
-      }
+      // Obat yang sama boleh punya beberapa baris (batch berbeda)
       state.baris.push({ obatId: o.id, batchId: null, jumlah: "" });
       gambarBaris();
       setTimeout(function () {
@@ -1636,51 +1630,150 @@
     gambarBaris();
   }
 
-  // buatBarisKeluarItem: single-line — nama | batch select (FEFO, stok > 0) | jumlah | satuan | ✕
-  function buatBarisKeluarItem(b, idx, obatList, refresh) {
+  // buatBarisKeluarItem: nama | batch select (FEFO, stok > 0, + "Tanpa batch") | jumlah | satuan | ✕
+  // - Obat yang sama boleh punya beberapa baris (batch berbeda).
+  // - Sisa batch dikurangi jumlah yang sudah dipakai baris lain untuk batch yang sama.
+  // - Jumlah > sisa → peringatan (tidak memblokir) + tombol ambil sisanya dari batch berikutnya.
+  function buatBarisKeluarItem(b, idx, obatList, refresh, state) {
     var obat = obatList.filter(function (o) { return o.id === b.obatId; })[0] || {};
+    var bungkus = el("div", { class: "pnr-baris-bungkus" });
     var baris = el("div", { class: "pnr-baris" });
+    var peringatan = el("div", { class: "pnr-peringatan", hidden: true });
+    bungkus.appendChild(baris);
+    bungkus.appendChild(peringatan);
 
     var labelNama = el("span", { class: "pnr-nama" }, [
       document.createTextNode(namaObatLabel(obat) || b.obatId),
       b.permintaanId ? el("span", { class: "pudar", style: "font-size:12px;margin-left:4px" }, "(permintaan)") : document.createTextNode("")
     ]);
 
-    // Select batch FEFO
+    // Cache batch + stok tanpa batch per obat (sekali ambil per sesi form, dipakai semua baris obat itu)
+    state.cacheBatch = state.cacheBatch || {};
+    function muatBatch() {
+      if (!state.cacheBatch[b.obatId]) {
+        state.cacheBatch[b.obatId] = Promise.all([
+          daftarSemua("batch", {
+            perPage: 200, sort: "expired_date,nomor_batch",
+            filter: 'obat = "' + b.obatId + '" && stok_sistem > 0'
+          }),
+          hitungStokTanpaBatch(b.obatId).then(null, function () { return null; })
+        ]).then(function (h) { return { batch: h[0].items, tanpa: h[1] }; });
+      }
+      return state.cacheBatch[b.obatId];
+    }
+
+    var batchMap = {};
+    var tanpaStok = null;
+
+    function barisLain() {
+      return state.baris.filter(function (x) { return x !== b && !x._hapus && x.obatId === b.obatId; });
+    }
+    function dipakaiLain(kunci) { // kunci: batchId atau OPSI_TANPA_BATCH
+      var t = 0;
+      barisLain().forEach(function (x) {
+        var k = x.tanpaBatch ? OPSI_TANPA_BATCH : x.batchId;
+        if (k === kunci) t += Number(x.jumlah) || 0;
+      });
+      return t;
+    }
+    function batchTerpakaiLain(batchId) {
+      return barisLain().some(function (x) { return x.batchId === batchId; });
+    }
+    function cekSemua() {
+      state.baris.forEach(function (x) { if (x._cek) x._cek(); });
+    }
+
+    // Sisa stok untuk pilihan baris ini (null = belum diketahui)
+    function sisaIni() {
+      if (b.tanpaBatch) return tanpaStok === null ? null : tanpaStok - dipakaiLain(OPSI_TANPA_BATCH);
+      var bt = batchMap[b.batchId];
+      if (!bt) return null;
+      return (Number(bt.stok_sistem) || 0) - dipakaiLain(b.batchId);
+    }
+
+    // Baris baru untuk sisa kekurangan: batch FEFO berikutnya yang belum dipakai, kalau habis → Tanpa batch
+    function tambahBarisKekurangan(kurang) {
+      var baru = {
+        obatId: b.obatId, batchId: null, jumlah: String(kurang),
+        permintaanIndukId: b.permintaanId || b.permintaanIndukId || undefined
+      };
+      var i = state.baris.indexOf(b);
+      state.baris.splice(i + 1, 0, baru);
+      refresh();
+    }
+
+    b._cek = function () {
+      peringatan.textContent = "";
+      peringatan.hidden = true;
+      var sisa = sisaIni();
+      var jml = Number(b.jumlah) || 0;
+      if (sisa === null || jml <= 0 || jml <= sisa) return;
+      var sisaPos = Math.max(sisa, 0);
+      var kurang = jml - sisaPos;
+      peringatan.hidden = false;
+      peringatan.appendChild(document.createTextNode(
+        "Sisa pilihan ini " + sisaPos + ", kurang " + kurang + ". "));
+      if (sisaPos > 0) {
+        var tombolSisa = el("button", { type: "button", class: "btn btn-garis pnr-btn-sisa" },
+          "+ Ambil " + kurang + " dari batch berikutnya");
+        tombolSisa.addEventListener("click", function () {
+          b.jumlah = String(sisaPos);
+          tambahBarisKekurangan(kurang);
+        });
+        peringatan.appendChild(tombolSisa);
+      } else {
+        peringatan.appendChild(document.createTextNode("Pilih batch lain atau \"Tanpa batch\"."));
+      }
+    };
+
+    // Select batch
     var pilBatch = el("select", { class: "pnr-sel-batch", "aria-label": "Batch FEFO" });
     pilBatch.appendChild(el("option", { value: "" }, "— batch —"));
 
-    var batchMap = {};
-    LPLPO.daftar("batch", {
-      perPage: 50, sort: "expired_date,nomor_batch",
-      filter: 'obat = "' + b.obatId + '" && stok_sistem > 0'
-    }).then(function (db) {
-      if (!db.items.length) {
-        pilBatch.appendChild(el("option", { value: "", disabled: true }, "Tidak ada stok"));
-        return;
-      }
-      db.items.forEach(function (bt, i) {
+    function setPilihan() {
+      if (b.tanpaBatch) pilBatch.value = OPSI_TANPA_BATCH;
+      else if (b.batchId) pilBatch.value = b.batchId;
+    }
+
+    muatBatch().then(function (data) {
+      tanpaStok = data.tanpa;
+      data.batch.forEach(function (bt) {
         var stok = bt.stok_sistem !== undefined && bt.stok_sistem !== null ? bt.stok_sistem : 0;
-        var label = (bt.nomor_batch || "tanpa nomor") +
-          (bt.expired_date ? " · " + formatED(bt.expired_date) : "") +
-          " [stok " + stok + "]";
-        var opt = el("option", { value: bt.id }, label);
-        pilBatch.appendChild(opt);
+        pilBatch.appendChild(el("option", { value: bt.id }, labelBatch(bt) + " [stok " + stok + "]"));
         batchMap[bt.id] = bt;
-        // Auto-pilih batch pertama (FEFO)
-        if (i === 0 && !b.batchId) {
-          b.batchId = bt.id;
-          b.batchNomor = bt.nomor_batch || "tanpa nomor";
-          pilBatch.value = bt.id;
-        }
       });
-      if (b.batchId) pilBatch.value = b.batchId;
+      pilBatch.appendChild(el("option", { value: OPSI_TANPA_BATCH },
+        "Tanpa batch" + (data.tanpa !== null ? " [stok " + data.tanpa + "]" : "")));
+
+      // Auto-pilih untuk baris baru: obat tanpa pengelolaan batch → Tanpa batch;
+      // selain itu batch FEFO pertama yang belum dipakai baris lain; kalau habis → Tanpa batch
+      if (!b.batchId && !b.tanpaBatch) {
+        if (!obat.pakai_batch) {
+          b.tanpaBatch = true;
+        } else {
+          var pilih = null;
+          for (var i = 0; i < data.batch.length; i++) {
+            if (!batchTerpakaiLain(data.batch[i].id)) { pilih = data.batch[i]; break; }
+          }
+          if (pilih) { b.batchId = pilih.id; b.batchNomor = labelBatch(pilih); }
+          else b.tanpaBatch = true;
+        }
+        if (b.tanpaBatch) b.batchNomor = "Tanpa batch";
+      }
+      setPilihan();
+      cekSemua();
     });
 
     pilBatch.addEventListener("change", function () {
-      b.batchId = pilBatch.value || null;
-      var bt = batchMap[b.batchId];
-      b.batchNomor = bt ? (bt.nomor_batch || "tanpa nomor") : "";
+      var v = pilBatch.value;
+      if (v === OPSI_TANPA_BATCH) {
+        b.tanpaBatch = true; b.batchId = null; b.batchNomor = "Tanpa batch";
+      } else {
+        b.tanpaBatch = false; b.batchId = v || null;
+        var bt = batchMap[b.batchId];
+        b.batchNomor = bt ? labelBatch(bt) : "";
+      }
+      cekSemua();
     });
     // Enter/Space di select → fokus ke jumlah
     pilBatch.addEventListener("keydown", function (e) {
@@ -1691,7 +1784,7 @@
       type: "number", min: "1", step: "1", class: "pnr-inp-jumlah",
       placeholder: "Jml", inputmode: "numeric", value: b.jumlah || ""
     });
-    inpJumlah.addEventListener("input", function () { b.jumlah = inpJumlah.value; });
+    inpJumlah.addEventListener("input", function () { b.jumlah = inpJumlah.value; cekSemua(); });
     inpJumlah.addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -1709,7 +1802,7 @@
     baris.appendChild(inpJumlah);
     baris.appendChild(satuan);
     baris.appendChild(tombolHapus);
-    return baris;
+    return bungkus;
   }
 
   function simpanPengeluaran(state, obatList, tombol, pesan, area) {
@@ -1727,7 +1820,7 @@
       pesan.className = "pesan galat"; pesan.hidden = false; return;
     }
     var tidakLengkap = state.baris.filter(function (b) {
-      return !b.jumlah || Number(b.jumlah) < 1 || !b.batchId;
+      return !b.jumlah || Number(b.jumlah) < 1 || (!b.batchId && !b.tanpaBatch);
     });
     if (tidakLengkap.length) {
       pesan.textContent = tidakLengkap.length + " item belum lengkap (jumlah atau batch belum dipilih).";
@@ -1737,8 +1830,9 @@
     tombol.disabled = true; tombol.textContent = "Menyimpan...";
     pesan.hidden = true;
 
-    var antrian = state.baris.slice();
-    var hasilList = [];
+    // Guard retry: baris yang mutasinya sudah tersimpan (_tersimpan) tidak disimpan ulang
+    var antrian = state.baris.filter(function (b) { return !b._tersimpan; });
+    var hasilList = state._hasil = state._hasil || [];
 
     function prosesBerikutnya() {
       if (!antrian.length) {
@@ -1751,9 +1845,16 @@
         function updateBerikutnya() {
           if (!uAntrian.length) { tampilRingkasanKeluar(area, hasilList, obatList, state); return; }
           var b = uAntrian.shift();
+          // jumlah_beri = total semua baris dari permintaan ini (termasuk baris tambahan beda batch)
+          var totalBeri = 0;
+          state.baris.forEach(function (x) {
+            if (x.permintaanId === b.permintaanId || x.permintaanIndukId === b.permintaanId) {
+              totalBeri += Number(x.jumlah) || 0;
+            }
+          });
           LPLPO.ubah("permintaan_unit", b.permintaanId, {
             status: "selesai",
-            jumlah_beri: Number(b.jumlah)
+            jumlah_beri: totalBeri
           }).then(updateBerikutnya, updateBerikutnya);
         }
         updateBerikutnya();
@@ -1763,7 +1864,7 @@
       var obat = obatList.filter(function (o) { return o.id === b.obatId; })[0] || {};
       LPLPO.buat("mutasi", {
         obat: b.obatId,
-        batch: b.batchId,
+        batch: b.batchId || undefined, // "Tanpa batch" → relasi batch kosong
         unit: state.unitId,
         jenis: "keluar",
         jumlah: Number(b.jumlah),
@@ -1771,6 +1872,7 @@
         status: "confirmed",
         catatan: ""
       }).then(function () {
+        b._tersimpan = true; // mutasi sudah masuk; jangan disimpan lagi bila ada retry
         // Update stok_sistem di batch, lalu di daftar_obat
         var ambilBatchKeluar = typeof LPLPO.ambil === "function"
           ? function (id) { return LPLPO.ambil("batch", id); }
@@ -1955,7 +2057,8 @@
   function simpanItemSO(soId, batchId, obatId, stokFisik, itemId) {
     var data = {
       stockopname: soId,
-      batch: batchId,
+      // Baris virtual "Tanpa batch" (id "tb:...") disimpan dengan relasi batch kosong
+      batch: (batchId && String(batchId).indexOf(PREFIKS_TANPA) === 0) ? undefined : batchId,
       obat: obatId,
       stok_fisik: stokFisik
     };
@@ -2167,6 +2270,89 @@
     return ambil(1);
   }
 
+  // ---------- Batch: konstanta & helper bersama ----------
+  // Nilai opsi dropdown untuk "Tanpa batch" (mutasi disimpan dengan batch kosong)
+  var OPSI_TANPA_BATCH = "__tanpa__";
+
+  // Label batch: "NOMOR · Mei 2027" atau "(tanpa nomor) · Mei 2027"
+  function labelBatch(bt) {
+    var no = (bt.nomor_batch || "").trim();
+    return (no || "(tanpa nomor)") + (bt.expired_date ? " · " + formatED(bt.expired_date) : "");
+  }
+
+  // Kunci ED per bulan: "2027-09" (dari "2027-09-01 00:00:00.000Z" atau "2027-09-01")
+  function kunciED(tgl) { return tgl ? String(tgl).slice(0, 7) : ""; }
+
+  // Stok "tanpa batch" satu obat = Σ masuk − Σ keluar dari mutasi yang tidak punya relasi batch.
+  // sampaiTgl opsional ("YYYY-MM-DD HH:MM:SS"); kosong = semua mutasi (live).
+  function hitungStokTanpaBatch(obatId, sampaiTgl) {
+    var f = 'obat = "' + obatId + '" && batch = ""';
+    if (sampaiTgl) f += ' && tanggal <= "' + sampaiTgl + '"';
+    return daftarSemua("mutasi", { perPage: 500, filter: f, sort: "tanggal,id" }).then(function (d) {
+      var s = 0;
+      d.items.forEach(function (tx) {
+        var j = Number(tx.jumlah) || 0;
+        s += (tx.jenis === "masuk") ? j : -j;
+      });
+      return s;
+    });
+  }
+
+  // ---------- Stockopname: baris virtual "Tanpa batch" ----------
+  // Baris ini bukan record batch. Id-nya "tb:<obatId>"; di stockopname_item disimpan dengan
+  // batch kosong dan obat terisi. Stok sistemnya selalu dihitung dari mutasi tanpa batch s.d. cutoff.
+  var PREFIKS_TANPA = "tb:";
+  function idBatchTanpa(obatId) { return PREFIKS_TANPA + obatId; }
+
+  // Kunci item SO di itemIndex: id batch, atau "tb:<obatId>" bila batch kosong
+  function kunciItemSO(si) { return si.batch ? si.batch : idBatchTanpa(si.obat); }
+
+  // Cutoff SO = hari terakhir bulan SO, pukul 23:59:59
+  function cutoffDariTanggal(tgl) {
+    if (!tgl) return "9999-12-31 23:59:59";
+    var p = String(tgl).slice(0, 10).split("-");
+    var akhir = new Date(parseInt(p[0], 10), parseInt(p[1], 10), 0);
+    return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" +
+           String(akhir.getDate()).padStart(2, "0") + " 23:59:59";
+  }
+  function ambilCutoffSO(soId) {
+    return LPLPO.daftar("stockopname", { filter: 'id = "' + soId + '"', perPage: 1 }).then(function (d) {
+      var so = (d.items && d.items[0]) || {};
+      return cutoffDariTanggal(so.tanggal);
+    });
+  }
+
+  // Bangun baris virtual "Tanpa batch" (array objek mirip batch) untuk SO.
+  // Dibuat untuk obat aktif yang: punya mutasi tanpa batch s.d. cutoff, atau sudah punya item SO
+  // tanpa batch, atau pakai_batch=false. Satu fetch mutasi untuk semua obat.
+  function bangunBatchTanpa(cutoff, obatList, soItems) {
+    return daftarSemua("mutasi", {
+      perPage: 500, sort: "tanggal,id",
+      filter: 'batch = "" && tanggal <= "' + cutoff + '"'
+    }).then(function (dm) {
+      var saldo = {}, ada = {};
+      dm.items.forEach(function (tx) {
+        if (!tx.obat) return;
+        ada[tx.obat] = true;
+        var j = Number(tx.jumlah) || 0;
+        saldo[tx.obat] = (saldo[tx.obat] || 0) + (tx.jenis === "masuk" ? j : -j);
+      });
+      soItems.forEach(function (si) { if (!si.batch && si.obat) ada[si.obat] = true; });
+      var hasil = [];
+      obatList.forEach(function (o) {
+        if (o.aktif === false) return;
+        if (!ada[o.id] && o.pakai_batch !== false) return;
+        hasil.push({
+          id: idBatchTanpa(o.id), _tanpa: true, obat: o.id,
+          nomor_batch: "", expired_date: "", stok_awal: 0,
+          _stok_sistem: saldo[o.id] || 0,
+          expand: { obat: o }
+        });
+      });
+      return hasil;
+    });
+  }
+
   // Hapus satu record.
   function hapusRecord(koleksi, id) {
     if (typeof LPLPO.hapus === "function") return LPLPO.hapus(koleksi, id);
@@ -2198,23 +2384,37 @@
       return [idx === -1 ? 98 : idx, kat, kode];
     }
 
-    // Muat batch, item SO, dan daftar_obat pakai_batch secara paralel
+    // Muat batch, item SO, semua obat, dan cutoff SO secara paralel; lalu bangun baris "Tanpa batch"
     Promise.all([
       daftarSemua("batch", { perPage: 500, sort: "nomor_batch", expand: "obat" }),
       ambilItemSO(soId),
-      daftarSemua("daftar_obat", { perPage: 500, filter: "aktif=true && pakai_batch=true", sort: "kode" })
-    ]).then(function (hasil) {
-      var semuaBatch = hasil[0].items;
+      daftarSemua("daftar_obat", { perPage: 500, sort: "kode" }),
+      ambilCutoffSO(soId)
+    ]).then(function (h) {
+      return bangunBatchTanpa(h[3], h[2].items, h[1].items).then(function (tanpa) {
+        h.push(tanpa);
+        return h;
+      });
+    }).then(function (hasil) {
+      var semuaBatch = hasil[0].items.concat(hasil[4]); // batch nyata + baris virtual "Tanpa batch"
       var soItems    = hasil[1].items;
-      var semuaObat  = hasil[2].items;
+      // Obat aktif yang dikelola per batch tapi belum punya batch: tetap tampil (dengan tombol + Batch)
+      var semuaObat  = hasil[2].items.filter(function (o) { return o.aktif !== false && o.pakai_batch === true; });
 
-      // Index: batchId → stockopname_item
+      // Index: batchId (atau "tb:<obatId>") → stockopname_item
       var itemIndex = {};
-      soItems.forEach(function (si) { itemIndex[si.batch] = si; });
+      soItems.forEach(function (si) { itemIndex[kunciItemSO(si)] = si; });
 
+      // _stok_sistem: pakai stok_cutoff dari SO kalau sudah ada, fallback ke stok_sistem live
+      // (baris "Tanpa batch" sudah punya _stok_sistem hasil hitung mutasi s.d. cutoff)
       semuaBatch.forEach(function (b) {
-        b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined)
-          ? b.stok_sistem : (b.stok_awal || 0);
+        if (b._tanpa) return;
+        var si = itemIndex[b.id];
+        if (si && si.stok_cutoff !== null && si.stok_cutoff !== undefined && si.stok_cutoff !== "") {
+          b._stok_sistem = Number(si.stok_cutoff);
+        } else {
+          b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
+        }
       });
 
       // Kelompokkan batch per obat (hanya yang belum ED)
@@ -2266,8 +2466,10 @@
       daftarObatUrut.forEach(function (grup) {
         var obat = grup.obat;
         var batchList = grup.batch.sort(function (a, b) {
+          if (!!a._tanpa !== !!b._tanpa) return a._tanpa ? 1 : -1; // "Tanpa batch" selalu paling bawah
           return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
         });
+        var adaBarisTanpa = batchList.some(function (b) { return b._tanpa; });
 
         // Panel per obat
         var panel = el("div", { class: "so-grup-obat panel" });
@@ -2281,9 +2483,27 @@
           bukaTambahBatch(area, soId, obat, function () { tahapHitung(area, soId, lblStatus); });
         });
 
+        var aksiHeader = [tombolTambah];
+        if (!adaBarisTanpa) {
+          // Obat ini belum punya baris "Tanpa batch": tawarkan untuk menghitung stok fisik tanpa batch
+          var tombolTanpa = el("button", {
+            type: "button", class: "so-btn-tambah-batch btn btn-garis",
+            title: "Hitung stok fisik tanpa batch untuk " + (obat.nama_utama || "")
+          }, "+ Tanpa batch");
+          tombolTanpa.addEventListener("click", function () {
+            var v = window.prompt("Jumlah fisik TANPA batch untuk " + (obat.nama_utama || "obat ini") + ":");
+            if (v === null || v === "" || isNaN(Number(v))) return;
+            tombolTanpa.disabled = true;
+            simpanItemSO(soId, idBatchTanpa(obat.id), obat.id, Number(v), null).then(function () {
+              tahapHitung(area, soId, lblStatus);
+            }, function () { tombolTanpa.disabled = false; });
+          });
+          aksiHeader.unshift(tombolTanpa);
+        }
+
         panel.appendChild(el("div", { class: "so-grup-header" }, [
           el("span", { class: "so-grup-nama" }, (obat.kode ? obat.kode + " · " : "") + (obat.nama_utama || obat.id)),
-          tombolTambah
+          el("span", { class: "so-grup-aksi" }, aksiHeader)
         ]));
 
         if (!batchList.length) {
@@ -2406,9 +2626,17 @@
             edBulanIni = d2.getFullYear() === skrg.getFullYear() && d2.getMonth() === skrg.getMonth();
           }
 
+          // Baris "Tanpa batch": bukan record batch, jadi tidak ada edit nomor/ED
+          var selBatch = b._tanpa
+            ? el("td", { "data-label": "No. batch" }, [el("em", { class: "pudar" }, "Tanpa batch")])
+            : el("td", { "data-label": "No. batch" }, [spanBatchTeks, tombolEBatch, inpBatchEdit, indEB]);
+          var selED = b._tanpa
+            ? el("td", { "data-label": "ED" }, [el("span", { class: "pudar" }, "—")])
+            : el("td", { "data-label": "ED" }, [spanEDTeks, inpEDEdit, tombolSimpEB, tombolBatalEB]);
+
           var tr = el("tr", { class: edBulanIni ? "terpilih" : "" }, [
-            el("td", { "data-label": "No. batch" }, [spanBatchTeks, tombolEBatch, inpBatchEdit, indEB]),
-            el("td", { "data-label": "ED" }, [spanEDTeks, inpEDEdit, tombolSimpEB, tombolBatalEB]),
+            selBatch,
+            selED,
             el("td", { class: "n", "data-label": "Stok sistem" },
               b._stok_sistem !== undefined ? String(b._stok_sistem) : "-"),
             el("td", { class: "n so-td-fisik", "data-label": "Jumlah fisik" }, [inp, indikator])
@@ -2585,6 +2813,91 @@
     inpBatch.focus();
   }
 
+  // Recalc semua stok_cutoff untuk semua batch dalam satu SO
+  // Fetch mutasi semua obat ter-cutoff, hitung, simpan ke stockopname_item.stok_cutoff
+  function jalankanRecalcSOSemua(soId, semuaBatch, soItems, itemIndex, progEl, selesai) {
+    function prog(t) { progEl.textContent = t; }
+
+    // Ambil soTanggal dari PocketBase dulu
+    prog("Memuat periode SO...");
+    LPLPO.daftar("stockopname", { filter: 'id = "' + soId + '"', perPage: 1 }).then(function (d) {
+      var so = (d.items && d.items[0]) || {};
+      var soTanggal = so.tanggal || "";
+
+      // Hitung cutoff (akhir bulan SO)
+      var cutoff = (function (tgl) {
+        if (!tgl) return new Date().toISOString().slice(0, 10);
+        var parts = tgl.slice(0, 10).split("-");
+        var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10) - 1;
+        var akhir = new Date(y, m + 1, 0);
+        return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0") + " 23:59:59";
+      })(soTanggal);
+
+      // Kelompokkan batch per obat
+      var obatBatch = {}; // obatId → [batch]
+      semuaBatch.forEach(function (bt) {
+        if (bt._tanpa) return; // "Tanpa batch" dihitung langsung dari mutasi, tidak perlu disimpan
+        var obatId = bt.obat || bt.daftar_obat;
+        if (!obatId) return;
+        if (!obatBatch[obatId]) obatBatch[obatId] = [];
+        obatBatch[obatId].push(bt);
+      });
+
+      var obatIds = Object.keys(obatBatch);
+      var total = obatIds.length;
+      var selesaiN = 0;
+      prog("0 / " + total + " obat...");
+
+      // Proses satu obat: fetch mutasi ter-cutoff, hitung, simpan stok_cutoff
+      function prosesObat(obatId) {
+        var batchList = obatBatch[obatId];
+        return daftarSemua("mutasi", {
+          perPage: 500, sort: "tanggal,id",
+          filter: 'obat = "' + obatId + '" && tanggal <= "' + cutoff + '"'
+        }).then(function (dm) {
+          var txList = dm.items || [];
+          var sisaBatch = {};
+          batchList.forEach(function (bt) { sisaBatch[bt.id] = Number(bt.stok_awal) || 0; });
+          txList.forEach(function (tx) {
+            if (!tx.batch) return;
+            if (!(tx.batch in sisaBatch)) sisaBatch[tx.batch] = 0;
+            var j = Number(tx.jumlah) || 0;
+            if (tx.jenis === "masuk") sisaBatch[tx.batch] += j;
+            else sisaBatch[tx.batch] -= j;
+          });
+
+          // Simpan stok_cutoff hanya ke item SO yang sudah ada (batch yang sudah dihitung fisiknya).
+          // Tidak membuat item baru: PocketBase v0.22 menyimpan angka kosong sebagai 0, sehingga
+          // item buatan recalc akan terbaca sebagai "fisik = 0" padahal belum dihitung.
+          var patches = [];
+          batchList.forEach(function (bt) {
+            var cutoffVal = sisaBatch[bt.id] !== undefined ? sisaBatch[bt.id] : 0;
+            var si = itemIndex[bt.id];
+            if (si) {
+              patches.push(LPLPO.ubah("stockopname_item", si.id, { stok_cutoff: cutoffVal }).then(function () {
+                si.stok_cutoff = cutoffVal;
+                bt._stok_sistem = cutoffVal;
+              }));
+            }
+          });
+          return Promise.all(patches);
+        }).then(function () {
+          selesaiN++;
+          prog(selesaiN + " / " + total + " obat...");
+        });
+      }
+
+      return antrianSeri(obatIds.map(function (id) { return function () { return prosesObat(id); }; }));
+    }).then(function () {
+      progEl.textContent = "Selesai.";
+      setTimeout(function () { progEl.textContent = ""; }, 3000);
+      selesai();
+    }, function (err) {
+      progEl.textContent = "Error: " + (err.pesan || err.message || "Gagal recalc.");
+      selesai();
+    });
+  }
+
   // tahapSesuaikan: daftar per-item (satu baris = satu obat)
   function tahapSesuaikan(area, soId) {
     area.textContent = "";
@@ -2592,13 +2905,20 @@
 
     Promise.all([
       daftarSemua("batch", { perPage: 500, sort: "nomor_batch", expand: "obat,daftar_obat" }),
-      ambilItemSO(soId)
-    ]).then(function (hasil) {
-      var semuaBatch = hasil[0].items;
+      ambilItemSO(soId),
+      daftarSemua("daftar_obat", { perPage: 500, sort: "kode" }),
+      ambilCutoffSO(soId)
+    ]).then(function (h) {
+      return bangunBatchTanpa(h[3], h[2].items, h[1].items).then(function (tanpa) {
+        h.push(tanpa);
+        return h;
+      });
+    }).then(function (hasil) {
+      var semuaBatch = hasil[0].items.concat(hasil[4]); // batch nyata + baris virtual "Tanpa batch"
       var soItems = hasil[1].items;
 
       var itemIndex = {};
-      soItems.forEach(function (si) { itemIndex[si.batch] = si; });
+      soItems.forEach(function (si) { itemIndex[kunciItemSO(si)] = si; });
 
       if (!soItems.length) {
         area.textContent = "";
@@ -2608,8 +2928,16 @@
         return;
       }
 
+      // _stok_sistem: pakai stok_cutoff dari SO kalau sudah ada, fallback ke stok_sistem live
+      // (baris "Tanpa batch" sudah punya _stok_sistem dari hitungan mutasi s.d. cutoff)
       semuaBatch.forEach(function (b) {
-        b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
+        if (b._tanpa) return;
+        var si = itemIndex[b.id];
+        if (si && si.stok_cutoff !== null && si.stok_cutoff !== undefined && si.stok_cutoff !== "") {
+          b._stok_sistem = Number(si.stok_cutoff);
+        } else {
+          b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
+        }
       });
 
       function fisikDari(b) {
@@ -2660,6 +2988,22 @@
         soPesanTerakhir = "";
       }
 
+      // Tombol Recalc semua + progress
+      var areaRecalcSemua = el("div", { class: "so-recalc-semua-wrap" });
+      var tombolRecalcSemua = el("button", { type: "button", class: "btn btn-hijau" }, "⟳ Sinkronkan semua stok cutoff");
+      var progRecalcSemua = el("span", { class: "so-recalc-prog" }, "");
+      areaRecalcSemua.appendChild(tombolRecalcSemua);
+      areaRecalcSemua.appendChild(progRecalcSemua);
+      area.appendChild(areaRecalcSemua);
+
+      tombolRecalcSemua.addEventListener("click", function () {
+        tombolRecalcSemua.disabled = true;
+        jalankanRecalcSOSemua(soId, semuaBatch, soItems, itemIndex, progRecalcSemua, function () {
+          tombolRecalcSemua.disabled = false;
+          tahapSesuaikan(area, soId);
+        });
+      });
+
       if (!daftarItem.length) {
         area.appendChild(el("section", { class: "panel" }, [
           el("p", { style: "margin:0" }, "Tidak ada selisih. Semua stok cocok dengan hitungan fisik. 🎉")
@@ -2684,7 +3028,7 @@
           var fisik = fisikDari(b);
           var d = fisik - b._stok_sistem;
           var dStr = (d > 0 ? "+" : "") + d;
-          var label = (b.nomor_batch || "tanpa batch") + (b.expired_date ? " (" + formatED(b.expired_date) + ")" : "");
+          var label = b._tanpa ? "Tanpa batch" : labelBatch(b);
           return el("span", { class: "so-batch-chip " + (d > 0 ? "lebih" : "kurang") }, label + " " + dStr);
         });
 
@@ -2730,7 +3074,7 @@
       var d = new Date(tgl);
       if (isNaN(d)) return tgl;
       var akhir = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0");
+      return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0") + " 23:59:59";
     })(soTanggal);
 
     var filterMutasi = 'obat = "' + obatId + '" && status = "confirmed" && tanggal <= "' + cutoff + '"';
@@ -2747,7 +3091,7 @@
       var soItems = hasil[3].items;
 
       var itemIndex = {};
-      soItems.forEach(function (si) { itemIndex[si.batch] = si; });
+      soItems.forEach(function (si) { itemIndex[kunciItemSO(si)] = si; });
 
       function fisikDari(b) {
         var si = itemIndex[b.id];
@@ -2756,9 +3100,33 @@
         return null;
       }
 
+      // _stok_sistem: pakai stok_cutoff dari SO kalau sudah ada, fallback ke stok_sistem live
       batchObat.forEach(function (b) {
-        b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
+        var si = itemIndex[b.id];
+        if (si && si.stok_cutoff !== null && si.stok_cutoff !== undefined && si.stok_cutoff !== "") {
+          b._stok_sistem = Number(si.stok_cutoff);
+        } else {
+          b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
+        }
       });
+
+      // Baris virtual "Tanpa batch": stok sistem = Σ mutasi tanpa batch s.d. cutoff (semuaTx sudah ter-cutoff).
+      // Dibuat bila ada mutasi tanpa batch, sudah ada item SO tanpa batch, atau obat tidak dikelola per batch.
+      // batchObat tetap hanya batch nyata (dipakai popup gabung/tambah mutasi); batchSO = batchObat + baris virtual.
+      var batchSO = batchObat.slice();
+      var adaTxTanpa = semuaTx.some(function (tx) { return !tx.batch; });
+      if (adaTxTanpa || itemIndex[idBatchTanpa(obatId)] || obat.pakai_batch === false) {
+        var saldoTanpa = 0;
+        semuaTx.forEach(function (tx) {
+          if (tx.batch) return;
+          var j = Number(tx.jumlah) || 0;
+          saldoTanpa += (tx.jenis === "masuk") ? j : -j;
+        });
+        batchSO.push({
+          id: idBatchTanpa(obatId), _tanpa: true, obat: obatId,
+          nomor_batch: "", expired_date: "", stok_awal: 0, _stok_sistem: saldoTanpa
+        });
+      }
 
       area.textContent = "";
 
@@ -2767,11 +3135,11 @@
       area.appendChild(tombolKembali);
 
       // Hitung selisih total (sistem vs fisik) untuk header
-      var totalSistem = batchObat.reduce(function (acc, bt) { return acc + bt._stok_sistem; }, 0);
-      var totalFisikHeader = batchObat.reduce(function (acc, bt) {
+      var totalSistem = batchSO.reduce(function (acc, bt) { return acc + bt._stok_sistem; }, 0);
+      var totalFisikHeader = batchSO.reduce(function (acc, bt) {
         var f = fisikDari(bt); return f !== null ? acc + f : acc;
       }, 0);
-      var adaFisik = batchObat.some(function (bt) { return fisikDari(bt) !== null; });
+      var adaFisik = batchSO.some(function (bt) { return fisikDari(bt) !== null; });
       var diffTotal = totalFisikHeader - totalSistem;
       var diffTotalStr = (diffTotal > 0 ? "+" : "") + diffTotal;
       var satuan = obat.satuan || "";
@@ -2798,7 +3166,7 @@
       area.appendChild(headerItem);
 
       // --- Bagian 1: Ringkasan per batch ---
-      var batchSelisih = batchObat.filter(function (b) {
+      var batchSelisih = batchSO.filter(function (b) {
         var fisik = fisikDari(b);
         return fisik !== null && fisik !== b._stok_sistem;
       });
@@ -2845,7 +3213,7 @@
 
           seksiBatch.appendChild(el("div", { class: "so-batch-baris-detail" }, [
             el("div", { class: "so-batch-info" }, [
-              el("span", { class: "so-batch-no" }, b.nomor_batch || "tanpa batch"),
+              el("span", { class: "so-batch-no" }, b._tanpa ? "Tanpa batch" : (b.nomor_batch || "(tanpa nomor)")),
               el("span", { class: "pudar" }, b.expired_date ? " · ED " + formatED(b.expired_date) : "")
             ]),
             el("div", { class: "so-batch-stok" }, [
@@ -2873,14 +3241,14 @@
 
       // Tombol recalc stok_sistem semua batch obat ini
       var indRecalc = el("span", { class: "so-ind", "aria-hidden": "true" });
-      var tombolRecalc = el("button", { type: "button", class: "btn btn-hijau", style: "font-size:13px" }, "⟳ Recalc stok sistem");
+      var tombolRecalc = el("button", { type: "button", class: "btn btn-hijau", style: "font-size:13px" }, "⟳ Sinkronkan stok cutoff");
       tombolRecalc.addEventListener("click", function () {
         tombolRecalc.disabled = true;
         indRecalc.className = "so-ind so-ind-loading";
 
+        // Hitung stok_cutoff dari semuaTx (sudah difilter s.d. cutoff)
         var sisaBatch = {};
         batchObat.forEach(function (bt) { sisaBatch[bt.id] = Number(bt.stok_awal) || 0; });
-        // semuaTx sudah difilter sampai cutoff saat fetch
         semuaTx.forEach(function (tx) {
           if (!tx.batch) return;
           var j = Number(tx.jumlah) || 0;
@@ -2889,16 +3257,23 @@
           else sisaBatch[tx.batch] -= j;
         });
 
-        var patches = batchObat.map(function (bt) {
-          return LPLPO.ubah("batch", bt.id, { stok_sistem: sisaBatch[bt.id] || 0 }).then(function () {
-            bt._stok_sistem = sisaBatch[bt.id] || 0;
-            bt.stok_sistem = bt._stok_sistem;
-          });
+        // Simpan ke stockopname_item.stok_cutoff — tidak sentuh batch.stok_sistem.
+        // Hanya untuk item SO yang sudah ada (tidak membuat item baru: angka kosong di PocketBase
+        // v0.22 tersimpan sebagai 0 dan akan terbaca sebagai fisik = 0).
+        var patches = [];
+        batchObat.forEach(function (bt) {
+          var cutoff = sisaBatch[bt.id] || 0;
+          var si = itemIndex[bt.id];
+          if (!si) return;
+          patches.push(LPLPO.ubah("stockopname_item", si.id, { stok_cutoff: cutoff }).then(function () {
+            bt._stok_sistem = cutoff;
+            si.stok_cutoff = cutoff;
+          }));
         });
         Promise.all(patches).then(function () {
           indRecalc.className = "so-ind so-ind-ok";
           tombolRecalc.disabled = false;
-          renderDetailItem(area, soId, obatId);
+          renderDetailItem(area, soId, obatId, soTanggal);
         }, function () {
           indRecalc.className = "so-ind so-ind-err";
           tombolRecalc.disabled = false;
@@ -4329,10 +4704,10 @@
   function renderPengaturanUmum(area) {
     // Panel Recalc global
     var panelRecalc = el("section", { class: "panel" });
-    panelRecalc.appendChild(el("h2", { style: "margin-top:0" }, "Recalculate stok sistem"));
+    panelRecalc.appendChild(el("h2", { style: "margin-top:0" }, "Sinkronkan stok sistem"));
     panelRecalc.appendChild(el("p", {}, "Hitung ulang stok_sistem semua batch dan daftar_obat dari data mutasi yang tersimpan. Gunakan jika stok tampak tidak sinkron."));
 
-    var tombolRecalc = el("button", { type: "button", class: "btn btn-primer" }, "Recalculate semua stok");
+    var tombolRecalc = el("button", { type: "button", class: "btn btn-primer" }, "Sinkronkan semua stok");
     var statusRecalc = el("p", { class: "status-koneksi", style: "margin-top:10px" }, "");
     panelRecalc.appendChild(tombolRecalc);
     panelRecalc.appendChild(statusRecalc);
@@ -4389,14 +4764,12 @@
     return ambilHal(1);
   }
 
-  // Recalc global: hitung stok_sistem dari nol berdasarkan mutasi
-  // Logika: stok_sistem batch = stok_awal + Σ(masuk) - Σ(keluar) untuk mutasi ber-batch
-  //         stok_sistem obat  = Σ stok_sistem semua batch obat tsb
-  //                           + Σ jumlah mutasi tanpa batch (masuk - keluar) untuk obat tsb
+  // Recalc global: update batch.stok_sistem (live) + daftar_obat.stok_sistem dari semua mutasi
+  // TIDAK mempengaruhi stockopname_item.stok_cutoff
   function jalankanRecalcGlobal(statusEl, selesai) {
     function tulis(t) { statusEl.textContent = t; }
 
-    tulis("Mengambil semua batch...");
+    tulis("Mengambil semua mutasi...");
     Promise.all([
       fetchSemua("batch", { sort: "id" }),
       fetchSemua("mutasi", { sort: "tanggal" })
@@ -4405,31 +4778,31 @@
       var semuaMutasi = hasil[1];
       tulis("Diterima: " + semuaBatch.length + " batch, " + semuaMutasi.length + " mutasi. Menghitung...");
 
-      // Kelompokkan mutasi per batch, dan per obat (mutasi tanpa batch)
-      var mutasiPerBatch = {};   // batchId → [mutasi]
-      var mutasiTanpaBatch = {}; // obatId  → delta (masuk - keluar)
+      // Delta per batch dan per obat (mutasi tanpa batch)
+      var deltaPerBatch = {};  // batchId → delta
+      var deltaPerObat  = {};  // obatId  → delta (mutasi tanpa batch)
 
       semuaMutasi.forEach(function (m) {
         var j = Number(m.jumlah) || 0;
         var delta = m.jenis === "masuk" ? j : -j;
         if (m.batch) {
-          if (!mutasiPerBatch[m.batch]) mutasiPerBatch[m.batch] = 0;
-          mutasiPerBatch[m.batch] += delta;
-        } else {
-          if (!mutasiTanpaBatch[m.obat]) mutasiTanpaBatch[m.obat] = 0;
-          mutasiTanpaBatch[m.obat] += delta;
+          deltaPerBatch[m.batch] = (deltaPerBatch[m.batch] || 0) + delta;
+        } else if (m.obat) {
+          deltaPerObat[m.obat] = (deltaPerObat[m.obat] || 0) + delta;
         }
       });
 
-      // Hitung stok baru tiap batch + akumulasi per obat
-      var stokObat = {}; // obatId → total stok dari semua batch
+      // Update batch.stok_sistem (nilai live) + akumulasi stok per obat
+      var stokObat = {}; // obatId → total dari semua batch
+      var n = 0;
 
       var antrianBatch = semuaBatch.map(function (bt) {
         return function () {
-          var delta = mutasiPerBatch[bt.id] || 0;
-          var stokBaru = (Number(bt.stok_awal) || 0) + delta;
-          if (!stokObat[bt.obat]) stokObat[bt.obat] = 0;
-          stokObat[bt.obat] += stokBaru;
+          var stokBaru = (Number(bt.stok_awal) || 0) + (deltaPerBatch[bt.id] || 0);
+          var obatId = bt.obat || bt.daftar_obat;
+          if (obatId) stokObat[obatId] = (stokObat[obatId] || 0) + stokBaru;
+          n++;
+          if (n % 10 === 0) tulis("Batch: " + n + "/" + semuaBatch.length + "...");
           if (Math.abs(stokBaru - (Number(bt.stok_sistem) || 0)) < 0.001) return Promise.resolve();
           return LPLPO.ubah("batch", bt.id, { stok_sistem: stokBaru });
         };
@@ -4437,19 +4810,21 @@
 
       tulis("Mengupdate " + semuaBatch.length + " batch...");
       return antrianSeri(antrianBatch).then(function () {
-        // Tambahkan delta mutasi tanpa batch ke total obat
-        Object.keys(mutasiTanpaBatch).forEach(function (obatId) {
-          if (!stokObat[obatId]) stokObat[obatId] = 0;
-          stokObat[obatId] += mutasiTanpaBatch[obatId];
+        // Tambahkan delta mutasi tanpa batch
+        Object.keys(deltaPerObat).forEach(function (obatId) {
+          stokObat[obatId] = (stokObat[obatId] || 0) + deltaPerObat[obatId];
         });
         return stokObat;
       });
     }).then(function (stokObat) {
       tulis("Mengambil daftar obat...");
       return fetchSemua("daftar_obat", { sort: "id" }).then(function (obatList) {
+        var m = 0;
         var antrianObat = obatList.map(function (ob) {
           return function () {
             var stokBaru = stokObat[ob.id] || 0;
+            m++;
+            if (m % 20 === 0) tulis("Obat: " + m + "/" + obatList.length + "...");
             if (Math.abs(stokBaru - (Number(ob.stok_sistem) || 0)) < 0.001) return Promise.resolve();
             return LPLPO.ubah("daftar_obat", ob.id, { stok_sistem: stokBaru });
           };
@@ -4458,7 +4833,7 @@
         return antrianSeri(antrianObat);
       });
     }).then(function () {
-      tulis("Selesai. Stok sistem semua batch dan obat sudah diperbarui.");
+      tulis("Selesai. Stok live semua batch dan obat sudah diperbarui.");
       selesai();
     }, function (err) {
       tulis("Error: " + (err.pesan || err.message || JSON.stringify(err)));

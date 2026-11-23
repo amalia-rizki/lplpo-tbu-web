@@ -1052,3 +1052,12 @@
 /* ---------- Pengaturan: preferensi ---------- */
 .pref-baris { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 14px; }
 .tab.tab-kecil { margin-top: 10px; margin-bottom: 6px; }
+
+/* Peringatan sisa stok di baris pengeluaran */
+.pnr-baris-bungkus { display: block; }
+.pnr-peringatan { margin: 2px 0 8px; padding: 6px 10px; font-size: 13px; border-left: 3px solid var(--koral, #e55); background: rgba(229, 85, 85, 0.08); color: var(--tinta); border-radius: 4px; }
+.pnr-peringatan[hidden] { display: none; }
+.pnr-btn-sisa { min-height: 30px; padding: 0 10px; font-size: 13px; margin-left: 4px; }
+
+/* Tombol aksi di header panel obat SO (+ Tanpa batch, + Batch) */
+.so-grup-aksi { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
