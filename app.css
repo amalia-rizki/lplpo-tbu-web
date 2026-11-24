@@ -1061,3 +1061,12 @@
 
 /* Tombol aksi di header panel obat SO (+ Tanpa batch, + Batch) */
 .so-grup-aksi { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* Menu Stok (Per obat / Batch) */
+.stok-bilah { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+.stok-cari { flex: 1 1 220px; min-width: 0; }
+.stok-pil { min-height: 40px; }
+.stok-info { font-size: 13px; }
+.stok-tr-klik { cursor: pointer; }
+.stok-tr-klik:hover, .stok-tr-klik:focus-visible { background: rgba(0, 0, 0, 0.04); outline: none; }
+.ks-aksi { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; }
