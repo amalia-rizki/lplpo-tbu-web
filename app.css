@@ -1082,23 +1082,32 @@
 /* SO: judul periode di dalam tab */
 .so-periode-judul { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; font-size: 18px; }
 
-/* SO tab 1: lewati item (barang tidak ketemu / posisi sulit) */
-.so-btn-lewat {
-  margin-left: 6px; padding: 4px 8px; font-size: 12px; border-radius: var(--radius);
-  border: 1px solid var(--garis); background: transparent; color: var(--tinta-pudar); cursor: pointer;
+/* SO tab 1: tanda ringan "hitung nanti" */
+.so-btn-tanda {
+  margin-left: 6px; padding: 2px 5px; font-size: 14px; line-height: 1; border: 0; background: transparent;
+  color: var(--tinta-pudar); opacity: .35; cursor: pointer; border-radius: 4px;
 }
-.so-btn-lewat:hover { border-color: var(--hijau); color: var(--tinta); }
-.so-btn-lewat:disabled { opacity: .5; cursor: default; }
-.so-lencana-lewat {
-  margin-left: 6px; padding: 2px 8px; font-size: 11px; border-radius: 999px;
-  background: color-mix(in srgb, var(--koral) 18%, transparent); color: var(--koral);
-  text-transform: uppercase; letter-spacing: .04em;
-}
-tr.so-dilewati td { opacity: .75; }
-tr.so-dilewati .so-btn-lewat, tr.so-dilewati .so-lencana-lewat { opacity: 1; }
+.so-btn-tanda:hover { opacity: .8; }
+.so-btn-tanda.aktif { opacity: 1; color: var(--koral); }
+tr.so-ditandai td { background: color-mix(in srgb, var(--koral) 10%, transparent); }
+tr.so-ditandai td:first-child { box-shadow: inset 3px 0 0 var(--koral); }
 .so-td-fisik { white-space: nowrap; }
 
 /* SO tab 1: cari + checkbox nonaktif */
 .so-bar-cari { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; }
 .so-cb-nonaktif { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; white-space: nowrap; cursor: pointer; }
 .so-grup-obat[hidden], .so-tabel-batch tr[hidden] { display: none !important; }
+
+/* Tampilan tabel penuh di layar sempit (toggle di SO), lebih ringkas */
+@media (max-width: 720px) {
+  html.tabel-penuh table.kartu { display: table; width: 100%; font-size: 13px; }
+  html.tabel-penuh table.kartu thead { position: static; left: auto; display: table-header-group; }
+  html.tabel-penuh table.kartu tbody { display: table-row-group; }
+  html.tabel-penuh table.kartu tr { display: table-row; background: none; border: 0; border-radius: 0; padding: 0; margin: 0; }
+  html.tabel-penuh table.kartu td { display: table-cell; padding: 5px 6px; text-align: left; border-bottom: 1px solid var(--garis); }
+  html.tabel-penuh table.kartu td.n { text-align: right; }
+  html.tabel-penuh table.kartu td::before { content: none; }
+  html.tabel-penuh table.kartu th { padding: 5px 6px; white-space: nowrap; }
+  html.tabel-penuh .tabel-gulir { overflow-x: auto; }
+  html.tabel-penuh .so-inp-tabel, html.tabel-penuh .inp-fisik { height: 34px; }
+}

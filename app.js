@@ -2068,18 +2068,24 @@
     return LPLPO.buat("stockopname_item", data);
   }
 
-  // Tandai item SO sebagai "dilewati" (barang tidak ketemu / posisi sulit, dihitung nanti).
-  // Disimpan sebagai item SO dengan dilewati=true; stok_fisik 0 diabaikan di semua perhitungan selisih.
-  // Butuh field Bool `dilewati` di koleksi stockopname_item.
-  function tandaiLewatiItemSO(soId, batchId, obatId, itemId) {
-    if (itemId) return LPLPO.ubah("stockopname_item", itemId, { dilewati: true, stok_fisik: 0 });
-    return LPLPO.buat("stockopname_item", {
-      stockopname: soId,
-      batch: (batchId && String(batchId).indexOf(PREFIKS_TANPA) === 0) ? undefined : batchId,
-      obat: obatId, stok_fisik: 0, dilewati: true
-    });
+  // Tanda ringan "hitung nanti" per batch di SO tab 1. Disimpan di localStorage perangkat ini
+  // (tidak membuat record di PocketBase), per SO.
+  function bacaTandaSO(soId) {
+    try { return JSON.parse(localStorage.getItem("lplpo_so_tanda_" + soId) || "{}") || {}; } catch (e) { return {}; }
   }
-  function itemDilewati(si) { return !!(si && si.dilewati === true); }
+  function simpanTandaSO(soId, obj) {
+    try { localStorage.setItem("lplpo_so_tanda_" + soId, JSON.stringify(obj)); } catch (e) {}
+  }
+
+  // Tampilan tabel penuh (tanpa mengubah tabel jadi kartu di layar sempit), diingat per perangkat
+  function tabelPenuhAktif() {
+    try { return localStorage.getItem("lplpo_tabel_penuh") === "1"; } catch (e) { return false; }
+  }
+  function aturTabelPenuh(aktif) {
+    document.documentElement.classList.toggle("tabel-penuh", !!aktif);
+    try { localStorage.setItem("lplpo_tabel_penuh", aktif ? "1" : "0"); } catch (e) {}
+  }
+  document.documentElement.classList.toggle("tabel-penuh", tabelPenuhAktif());
 
   // soAktifId: ID stockopname yang sedang dipakai (dipilih user), atau null
   var soAktifId = null;
@@ -2212,7 +2218,12 @@
       soAktifId = null;
       renderStockopname();
     });
+    var tombolTabel = el("button", { type: "button", class: "btn btn-garis so-btn-tampilan", style: "font-size:12px; margin-bottom:8px; margin-left:6px" }, "");
+    function labelTombolTabel() { tombolTabel.textContent = tabelPenuhAktif() ? "▤ Tampilan kartu" : "▦ Tampilan tabel"; }
+    labelTombolTabel();
+    tombolTabel.addEventListener("click", function () { aturTabelPenuh(!tabelPenuhAktif()); labelTombolTabel(); });
     area.appendChild(tombolGanti);
+    area.appendChild(tombolTabel);
 
     var tabNav = el("nav", { class: "tab", "aria-label": "Tahap stockopname" });
     var tabHitung    = el("a", { href: "#/stockopname/hitung" }, "1 · Penghitungan");
@@ -2485,7 +2496,8 @@
       var totalBatch = 0;
       var panelList = []; // { panel, baris:[{tr,status}] } untuk filter
 
-      // Bilah filter: Semua / Belum dihitung / Dilewati
+      // Bilah filter: Semua / Belum dihitung / Ditandai
+      var tandaSO = bacaTandaSO(soId);
       var filterAktif = "semua";
       var kataCari = "";
       var tampilNonaktif = false;
@@ -2502,7 +2514,7 @@
       ]));
       var tombolFilter = {};
       var barFilter = el("div", { class: "ks-filter-bar" });
-      [["semua", "Semua"], ["belum", "Belum dihitung"], ["lewat", "Dilewati"]].forEach(function (f) {
+      [["semua", "Semua"], ["belum", "Belum dihitung"], ["tanda", "Ditandai"]].forEach(function (f) {
         var t = el("button", { type: "button", class: "ks-filter-btn" + (f[0] === "semua" ? " ks-filter-aktif" : "") }, f[1]);
         t.addEventListener("click", function () {
           filterAktif = f[0];
@@ -2517,21 +2529,21 @@
       area.appendChild(barFilter);
 
       function perbaruiInfo() {
-        var ids = Object.keys(inputMap).filter(function (k) { return tampilNonaktif || inputMap[k].aktif; }), diisi = 0, lewat = 0;
+        var ids = Object.keys(inputMap).filter(function (k) { return tampilNonaktif || inputMap[k].aktif; }), diisi = 0, tanda = 0;
         ids.forEach(function (k) {
-          if (inputMap[k].state.lewat) lewat++;
-          else if (inputMap[k].inp.value !== "") diisi++;
+          if (inputMap[k].inp.value !== "") diisi++;
+          if (inputMap[k].state.tanda) tanda++;
         });
-        var belum = ids.length - diisi - lewat;
-        infoIsi.textContent = diisi + " dari " + ids.length + " batch sudah diisi · " + belum + " belum dihitung · " + lewat + " dilewati.";
+        var belum = ids.length - diisi;
+        infoIsi.textContent = diisi + " dari " + ids.length + " batch sudah diisi · " + belum + " belum dihitung · " + tanda + " ditandai.";
         tombolFilter.belum.textContent = "Belum dihitung (" + belum + ")";
-        tombolFilter.lewat.textContent = "Dilewati (" + lewat + ")";
+        tombolFilter.tanda.textContent = "Ditandai (" + tanda + ")";
       }
       function terapkanFilter() {
         panelList.forEach(function (p) {
           var tampil = 0;
           p.baris.forEach(function (r) {
-            var ok = filterAktif === "semua" || r.status() === filterAktif;
+            var ok = r.cocok(filterAktif);
             r.tr.hidden = !ok;
             if (ok) tampil++;
           });
@@ -2605,7 +2617,7 @@
 
         batchList.forEach(function (b) {
           var siItem = itemIndex[b.id];
-          var nilaiSimpan = siItem && !itemDilewati(siItem) ? siItem.stok_fisik : "";
+          var nilaiSimpan = siItem ? siItem.stok_fisik : "";
 
           var indikator = el("span", {
             class: "so-ind" + (siItem ? " so-ind-ok" : ""),
@@ -2621,48 +2633,23 @@
             "aria-label": "Jumlah fisik batch " + (b.nomor_batch || "tanpa nomor")
           });
 
-          var state = { itemId: siItem ? siItem.id : null, saving: false, lewat: itemDilewati(siItem) };
+          var state = { itemId: siItem ? siItem.id : null, saving: false, tanda: !!tandaSO[b.id] };
           inputMap[b.id] = { inp: inp, state: state, aktif: obat.aktif !== false };
           totalBatch++;
 
-          var tombolLewat = el("button", { type: "button", class: "so-btn-lewat", title: "Lewati item ini (barang tidak ketemu / posisi sulit)" }, "Lewati");
-          var lencanaLewat = el("span", { class: "so-lencana-lewat", hidden: true }, "Dilewati");
+          // Tanda ringan "hitung nanti": ikon kecil, baris ditandai diberi garis aksen
           var tr = null;
-          function terapkanTampilan() {
-            inp.disabled = state.lewat;
-            tombolLewat.textContent = state.lewat ? "Batal lewati" : "Lewati";
-            lencanaLewat.hidden = !state.lewat;
-            if (tr) tr.className = (tr.className || "").replace(/\s*so-dilewati/g, "") + (state.lewat ? " so-dilewati" : "");
-            if (state.lewat) { indikator.className = "so-ind"; indikator.title = "dilewati"; }
+          var tombolTanda = el("button", { type: "button", class: "so-btn-tanda", "aria-label": "Tandai: hitung nanti", title: "Tandai: hitung nanti" }, "⚑");
+          function terapkanTanda() {
+            tombolTanda.className = "so-btn-tanda" + (state.tanda ? " aktif" : "");
+            tombolTanda.setAttribute("aria-pressed", state.tanda ? "true" : "false");
+            if (tr) tr.className = (tr.className || "").replace(/\s*so-ditandai/g, "") + (state.tanda ? " so-ditandai" : "");
           }
-          tombolLewat.addEventListener("click", function () {
-            if (state.saving) return;
-            state.saving = true;
-            tombolLewat.disabled = true;
-            if (!state.lewat) {
-              if (inp.value !== "" && !window.confirm("Jumlah fisik yang sudah diisi (" + inp.value + ") akan diabaikan. Lewati item ini?")) {
-                state.saving = false; tombolLewat.disabled = false; return;
-              }
-              tandaiLewatiItemSO(soId, b.id, obat.id, state.itemId).then(function (rec) {
-                state.itemId = rec.id; state.lewat = true; state.saving = false;
-                inp.value = ""; tombolLewat.disabled = false;
-                terapkanTampilan(); perbaruiInfo();
-              }, function () {
-                state.saving = false; tombolLewat.disabled = false;
-                indikator.className = "so-ind so-ind-err"; indikator.title = "gagal menandai (cek field dilewati di PocketBase)";
-              });
-            } else {
-              // Batal lewati: hapus item (fisik 0 bawaan bukan angka yang dihitung)
-              hapusRecord("stockopname_item", state.itemId).then(function () {
-                state.itemId = null; state.lewat = false; state.saving = false;
-                tombolLewat.disabled = false;
-                indikator.className = "so-ind"; indikator.title = "belum disimpan";
-                terapkanTampilan(); perbaruiInfo();
-              }, function () {
-                state.saving = false; tombolLewat.disabled = false;
-                indikator.className = "so-ind so-ind-err"; indikator.title = "gagal membatalkan";
-              });
-            }
+          tombolTanda.addEventListener("click", function () {
+            state.tanda = !state.tanda;
+            if (state.tanda) tandaSO[b.id] = 1; else delete tandaSO[b.id];
+            simpanTandaSO(soId, tandaSO);
+            terapkanTanda(); perbaruiInfo();
           });
 
           function simpan() {
@@ -2758,10 +2745,12 @@
             selED,
             el("td", { class: "n", "data-label": "Stok sistem" },
               b._stok_sistem !== undefined ? String(b._stok_sistem) : "-"),
-            el("td", { class: "n so-td-fisik", "data-label": "Jumlah fisik" }, [inp, indikator, lencanaLewat, tombolLewat])
+            el("td", { class: "n so-td-fisik", "data-label": "Jumlah fisik" }, [inp, indikator, tombolTanda])
           ]);
-          terapkanTampilan();
-          barisPanel.push({ tr: tr, status: function () { return state.lewat ? "lewat" : (inp.value !== "" ? "terisi" : "belum"); } });
+          terapkanTanda();
+          barisPanel.push({ tr: tr, cocok: function (f) {
+            return f === "semua" || (f === "belum" && inp.value === "") || (f === "tanda" && state.tanda);
+          } });
           badan.appendChild(tr);
         });
 
@@ -3146,7 +3135,6 @@
 
       function fisikDari(b) {
         var si = itemIndex[b.id];
-        if (itemDilewati(si)) return null;
         if (si) return Number(si.stok_fisik);
         if (edLewat(b.expired_date)) return 0;
         return null;
@@ -3158,18 +3146,13 @@
         var obat = (b.expand && (b.expand.obat || b.expand.daftar_obat)) || {};
         var obatId = b.obat || b.daftar_obat || obat.id;
         if (!obatId) return;
-        if (!obatMap[obatId]) obatMap[obatId] = { obat: obat, obatId: obatId, batch: [], totalSistem: 0, totalFisik: 0, adaNull: false, lewat: [] };
+        if (!obatMap[obatId]) obatMap[obatId] = { obat: obat, obatId: obatId, batch: [], totalSistem: 0, totalFisik: 0, adaNull: false, belum: 0 };
         var fisik = fisikDari(b);
         obatMap[obatId].batch.push(b);
-        if (itemDilewati(itemIndex[b.id])) {
-          // Item dilewati: tidak ikut selisih (sistem maupun fisik)
-          obatMap[obatId].lewat.push(b);
-          obatMap[obatId].adaNull = true;
-          return;
-        }
+        // Batch yang belum dihitung tidak ikut perbandingan (sistem maupun fisik)
+        if (fisik === null) { obatMap[obatId].adaNull = true; obatMap[obatId].belum++; return; }
         obatMap[obatId].totalSistem += b._stok_sistem;
-        if (fisik === null) { obatMap[obatId].adaNull = true; }
-        else { obatMap[obatId].totalFisik += fisik; }
+        obatMap[obatId].totalFisik += fisik;
       });
 
       var URUT_KAT = ["A","T","B","F","D","C","E","G","H","I","J","K","L","M","V","W","N","O","P","Q","R","S","X","U","Y"];
@@ -3223,32 +3206,6 @@
           tahapSesuaikan(area, soId);
         });
       });
-
-      // Daftar item yang dilewati saat penghitungan (belum dihitung)
-      var daftarLewat = Object.keys(obatMap).map(function (id) { return obatMap[id]; })
-        .filter(function (i) { return i.lewat.length; })
-        .sort(function (a, b) {
-          var ua = urutObat(a.obat.kode), ub = urutObat(b.obat.kode);
-          if (ua[0] !== ub[0]) return ua[0] - ub[0];
-          return (ua[1] || "").localeCompare(ub[1] || "");
-        });
-      if (daftarLewat.length) {
-        var jmlBatchLewat = daftarLewat.reduce(function (n, i) { return n + i.lewat.length; }, 0);
-        area.appendChild(el("section", { class: "panel so-usang" }, [
-          el("strong", {}, "⏭ " + jmlBatchLewat + " item dilewati (" + daftarLewat.length + " obat)"),
-          el("p", { class: "pudar", style: "margin:4px 0 8px; font-size:13px" },
-            "Belum dihitung dan tidak ikut selisih. Hitung di tab Penghitungan, lalu klik \"Batal lewati\"."),
-        ].concat(daftarLewat.map(function (i) {
-          return el("div", { class: "so-usang-baris" }, [
-            el("div", { class: "so-usang-isi" }, [
-              el("a", { href: "#/stockopname/item/" + i.obatId, class: "so-usang-nama" }, i.obat.nama_utama || i.obatId),
-              el("div", { class: "so-batch-chips" }, i.lewat.map(function (b) {
-                return el("span", { class: "so-batch-chip" }, b._tanpa ? "Tanpa batch" : labelBatch(b));
-              }))
-            ])
-          ]);
-        }))));
-      }
 
       // Banner: obat yang stok cutoff-nya usang karena ada mutasi baru/diubah sebelum cutoff
       var wadahUsang = el("div", {});
@@ -3358,7 +3315,8 @@
                 el("span", { class: "lencana aman" }, "✓ Sesuai")
               ]),
               el("div", { class: "pudar", style: "font-size:13px" },
-                "Sistem " + formatAngka(item.totalSistem) + " " + (item.obat.satuan || "") + " = fisik " + formatAngka(item.totalFisik))
+                "Sistem " + formatAngka(item.totalSistem) + " " + (item.obat.satuan || "") + " = fisik " + formatAngka(item.totalFisik) +
+                (item.belum ? " · " + item.belum + " batch belum dihitung" : ""))
             ]));
           });
           return;
@@ -3403,6 +3361,7 @@
               ])
             ]),
             batchRows.length ? el("div", { class: "so-batch-chips" }, batchRows) : el("span", {}),
+            item.belum ? el("div", { class: "pudar", style: "font-size:12px; margin-top:4px" }, item.belum + " batch belum dihitung (tidak ikut selisih)") : el("span", {}),
             el("div", { class: "so-kartu-lihat pudar" }, "Lihat detail →")
           ]));
         });
@@ -3455,7 +3414,6 @@
 
       function fisikDari(b) {
         var si = itemIndex[b.id];
-        if (itemDilewati(si)) return null;
         if (si) return Number(si.stok_fisik);
         if (edLewat(b.expired_date)) return 0;
         return null;
@@ -3497,7 +3455,7 @@
 
       // Hitung selisih total (sistem vs fisik) untuk header
       var totalSistem = batchSO.reduce(function (acc, bt) {
-        return itemDilewati(itemIndex[bt.id]) ? acc : acc + bt._stok_sistem;
+        return fisikDari(bt) === null ? acc : acc + bt._stok_sistem;
       }, 0);
       var totalFisikHeader = batchSO.reduce(function (acc, bt) {
         var f = fisikDari(bt); return f !== null ? acc + f : acc;
