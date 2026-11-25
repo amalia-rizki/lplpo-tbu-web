@@ -636,12 +636,12 @@
 .so-batch-chip.kurang { background: color-mix(in srgb, var(--bahaya, #ef4444) 15%, transparent); color: var(--bahaya, #ef4444); }
 
 /* SO: pilih periode */
-.so-periode-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.so-periode-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .so-periode-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; padding: 10px 14px; border-radius: var(--radius);
+  width: 100%; padding: 18px 16px; min-height: 60px; border-radius: var(--radius);
   border: 1.5px solid var(--garis); background: var(--kertas); color: var(--tinta);
-  font-size: 14px; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  font-size: 16px; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s;
 }
 .so-periode-btn:hover { border-color: var(--aksen, #3b82f6); background: var(--kartu); }
 .so-periode-nama { font-weight: 600; }
@@ -1070,3 +1070,14 @@
 .stok-tr-klik { cursor: pointer; }
 .stok-tr-klik:hover, .stok-tr-klik:focus-visible { background: rgba(0, 0, 0, 0.04); outline: none; }
 .ks-aksi { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; }
+
+/* SO tab 2: banner obat yang stok cutoff-nya perlu disinkronkan ulang */
+.so-usang { border-left: 4px solid var(--koral); margin-bottom: 12px; }
+.so-usang-baris { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid var(--garis, rgba(128,128,128,.25)); }
+.so-usang-isi { flex: 1; min-width: 0; }
+.so-usang-nama { font-weight: 600; color: inherit; text-decoration: none; }
+.so-usang-tombol { font-size: 13px; flex-shrink: 0; }
+.so-usang-mutasi { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+
+/* SO: judul periode di dalam tab */
+.so-periode-judul { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; font-size: 18px; }
