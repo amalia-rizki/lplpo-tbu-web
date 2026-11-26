@@ -2397,6 +2397,7 @@
   }
 
   var soPesanTerakhir = "";
+  var soBukaManual = {}; // "<soId>:<obatId>" → true bila panel obat stok nol dibuka manual (bertahan selama sesi)
 
   // Teks gabungan untuk pencarian obat: nama_utama + nama_lplpo + alias + kode (huruf kecil)
   function teksCariObat(o) {
@@ -2529,15 +2530,19 @@
       area.appendChild(barFilter);
 
       function perbaruiInfo() {
-        var ids = Object.keys(inputMap).filter(function (k) { return tampilNonaktif || inputMap[k].aktif; }), diisi = 0, tanda = 0;
+        var ids = Object.keys(inputMap).filter(function (k) {
+          return (tampilNonaktif || inputMap[k].aktif) && !inputMap[k].ref.ciut; // panel diciutkan tidak dihitung
+        }), diisi = 0, tanda = 0;
         ids.forEach(function (k) {
           if (inputMap[k].inp.value !== "") diisi++;
-          if (inputMap[k].state.tanda) tanda++;
         });
+        tanda = panelList.filter(function (p) { return p.ref.tanda && (tampilNonaktif || p.aktif); }).length;
         var belum = ids.length - diisi;
-        infoIsi.textContent = diisi + " dari " + ids.length + " batch sudah diisi · " + belum + " belum dihitung · " + tanda + " ditandai.";
+        var jmlCiut = panelList.filter(function (p) { return p.ref.ciut && (tampilNonaktif || p.aktif); }).length;
+        infoIsi.textContent = diisi + " dari " + ids.length + " batch sudah diisi · " + belum + " belum dihitung · " + tanda + " obat ditandai" +
+          (jmlCiut ? " · " + jmlCiut + " obat stok nol diciutkan." : ".");
         tombolFilter.belum.textContent = "Belum dihitung (" + belum + ")";
-        tombolFilter.tanda.textContent = "Ditandai (" + tanda + ")";
+        tombolFilter.tanda.textContent = "Ditandai (" + tanda + " obat)";
       }
       function terapkanFilter() {
         panelList.forEach(function (p) {
@@ -2549,7 +2554,11 @@
           });
           var cocokAktif = tampilNonaktif || p.aktif;
           var cocokCari = !kataCari || p.teks.indexOf(kataCari) !== -1;
-          p.panel.hidden = !cocokAktif || !cocokCari || (filterAktif !== "semua" && tampil === 0);
+          // Hasil pencarian otomatis dibuka walau stok nol
+          if (kataCari && cocokCari && cocokAktif && p.ref.ciut) p.atur(false);
+          var sembunyiFilter = filterAktif === "tanda" ? !p.ref.tanda
+            : (filterAktif !== "semua" && (tampil === 0 || p.ref.ciut));
+          p.panel.hidden = !cocokAktif || !cocokCari || sembunyiFilter;
         });
       }
 
@@ -2561,6 +2570,12 @@
           return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
         });
         var adaBarisTanpa = batchList.some(function (b) { return b._tanpa; });
+
+        // Obat yang bisa diciutkan: semua batch stok sistem 0 (atau tanpa batch), belum ada yang diisi / ditandai
+        var bisaCiut = !tandaSO[obat.id] && !batchList.some(function (b) { return itemIndex[b.id]; }) &&
+          batchList.every(function (b) { return (Number(b._stok_sistem) || 0) === 0; });
+        var kunciBuka = soId + ":" + obat.id;
+        var ref = { ciut: bisaCiut && !soBukaManual[kunciBuka], tanda: !!tandaSO[obat.id] };
 
         // Panel per obat
         var panel = el("div", { class: "so-grup-obat panel" });
@@ -2592,15 +2607,53 @@
           aksiHeader.unshift(tombolTanpa);
         }
 
-        panel.appendChild(el("div", { class: "so-grup-header" }, [
-          el("span", { class: "so-grup-nama" }, (obat.kode ? obat.kode + " · " : "") + (obat.nama_utama || obat.id) + (obat.aktif === false ? " (nonaktif)" : "")),
-          el("span", { class: "so-grup-aksi" }, aksiHeader)
-        ]));
+        var tombolBuka = el("button", { type: "button", class: "so-btn-buka", "aria-label": "Buka / ciutkan " + (obat.nama_utama || "") }, "▸");
+        tombolBuka.hidden = !bisaCiut;
+        var ringkasCiut = el("span", { class: "pudar so-ciut-ringkas" },
+          batchList.length ? "stok 0 · " + batchList.length + " batch" : "tidak ada batch aktif");
+        var spanNama = el("span", { class: "so-grup-nama" }, (obat.kode ? obat.kode + " · " : "") + (obat.nama_utama || obat.id) + (obat.aktif === false ? " (nonaktif)" : ""));
+        var spanAksi = el("span", { class: "so-grup-aksi" }, aksiHeader);
+        // Tanda "hitung nanti" per obat (ikon kecil, tersimpan di localStorage perangkat ini)
+        var tombolTandaObat = el("button", { type: "button", class: "so-btn-tanda", "aria-label": "Tandai obat: hitung nanti", title: "Tandai: hitung nanti" }, "⚑");
+        var kepalaGrup = el("div", { class: "so-grup-header" }, [
+          el("span", { class: "so-grup-kiri" }, [tombolBuka, spanNama, ringkasCiut, tombolTandaObat]),
+          spanAksi
+        ]);
+        panel.appendChild(kepalaGrup);
+        var isiGrup = el("div", { class: "so-grup-isi" });
+        panel.appendChild(isiGrup);
+
+        function aturCiut(ciut) {
+          ref.ciut = ciut;
+          if (ciut) delete soBukaManual[kunciBuka]; else if (bisaCiut) soBukaManual[kunciBuka] = true;
+          panel.className = "so-grup-obat panel" + (ref.ciut ? " so-ciut" : "") + (ref.tanda ? " so-ditandai-obat" : "");
+          tombolTandaObat.className = "so-btn-tanda" + (ref.tanda ? " aktif" : "");
+          tombolTandaObat.setAttribute("aria-pressed", ref.tanda ? "true" : "false");
+          isiGrup.hidden = ref.ciut;
+          spanAksi.hidden = ref.ciut;
+          ringkasCiut.hidden = !ref.ciut;
+          tombolBuka.textContent = ref.ciut ? "▸" : "▾";
+          tombolBuka.setAttribute("aria-expanded", ref.ciut ? "false" : "true");
+        }
+        aturCiut(ref.ciut);
+        tombolTandaObat.addEventListener("click", function () {
+          ref.tanda = !ref.tanda;
+          if (ref.tanda) tandaSO[obat.id] = 1; else delete tandaSO[obat.id];
+          simpanTandaSO(soId, tandaSO);
+          aturCiut(ref.tanda ? false : ref.ciut); // obat yang ditandai selalu terbuka
+          perbaruiInfo(); terapkanFilter();
+        });
+        if (bisaCiut) {
+          var gantiCiut = function () { aturCiut(!ref.ciut); perbaruiInfo(); terapkanFilter(); };
+          tombolBuka.addEventListener("click", gantiCiut);
+          spanNama.addEventListener("click", gantiCiut);
+          spanNama.style.cursor = "pointer";
+        }
 
         if (!batchList.length) {
           // Obat tanpa batch — tampilkan baris kosong sebagai petunjuk
-          panel.appendChild(el("p", { class: "so-no-batch pudar" }, "Belum ada batch. Gunakan + Batch untuk menambah."));
-          panelList.push({ panel: panel, baris: [], aktif: obat.aktif !== false, teks: teksCariObat(obat) });
+          isiGrup.appendChild(el("p", { class: "so-no-batch pudar" }, "Belum ada batch. Gunakan + Batch untuk menambah."));
+          panelList.push({ panel: panel, baris: [], aktif: obat.aktif !== false, teks: teksCariObat(obat), ref: ref, atur: aturCiut });
           area.appendChild(panel);
           return;
         }
@@ -2633,24 +2686,11 @@
             "aria-label": "Jumlah fisik batch " + (b.nomor_batch || "tanpa nomor")
           });
 
-          var state = { itemId: siItem ? siItem.id : null, saving: false, tanda: !!tandaSO[b.id] };
-          inputMap[b.id] = { inp: inp, state: state, aktif: obat.aktif !== false };
+          var state = { itemId: siItem ? siItem.id : null, saving: false };
+          inputMap[b.id] = { inp: inp, state: state, aktif: obat.aktif !== false, ref: ref };
           totalBatch++;
 
-          // Tanda ringan "hitung nanti": ikon kecil, baris ditandai diberi garis aksen
           var tr = null;
-          var tombolTanda = el("button", { type: "button", class: "so-btn-tanda", "aria-label": "Tandai: hitung nanti", title: "Tandai: hitung nanti" }, "⚑");
-          function terapkanTanda() {
-            tombolTanda.className = "so-btn-tanda" + (state.tanda ? " aktif" : "");
-            tombolTanda.setAttribute("aria-pressed", state.tanda ? "true" : "false");
-            if (tr) tr.className = (tr.className || "").replace(/\s*so-ditandai/g, "") + (state.tanda ? " so-ditandai" : "");
-          }
-          tombolTanda.addEventListener("click", function () {
-            state.tanda = !state.tanda;
-            if (state.tanda) tandaSO[b.id] = 1; else delete tandaSO[b.id];
-            simpanTandaSO(soId, tandaSO);
-            terapkanTanda(); perbaruiInfo();
-          });
 
           function simpan() {
             var v = inp.value;
@@ -2745,19 +2785,18 @@
             selED,
             el("td", { class: "n", "data-label": "Stok sistem" },
               b._stok_sistem !== undefined ? String(b._stok_sistem) : "-"),
-            el("td", { class: "n so-td-fisik", "data-label": "Jumlah fisik" }, [inp, indikator, tombolTanda])
+            el("td", { class: "n so-td-fisik", "data-label": "Jumlah fisik" }, [inp, indikator])
           ]);
-          terapkanTanda();
           barisPanel.push({ tr: tr, cocok: function (f) {
-            return f === "semua" || (f === "belum" && inp.value === "") || (f === "tanda" && state.tanda);
+            return f === "semua" || (f === "belum" && inp.value === "") || (f === "tanda" && ref.tanda);
           } });
           badan.appendChild(tr);
         });
 
-        panel.appendChild(el("div", { class: "tabel-gulir" }, [
+        isiGrup.appendChild(el("div", { class: "tabel-gulir" }, [
           el("table", { class: "so-tabel-batch" }, [kepala, badan])
         ]));
-        panelList.push({ panel: panel, baris: barisPanel, aktif: obat.aktif !== false, teks: teksCariObat(obat) });
+        panelList.push({ panel: panel, baris: barisPanel, aktif: obat.aktif !== false, teks: teksCariObat(obat), ref: ref, atur: aturCiut });
         area.appendChild(panel);
       });
 
