@@ -3409,6 +3409,24 @@
       var semuaTx = hasil[2].items;
       var soItems = hasil[3].items;
 
+      // Urutkan batch untuk semua pemilih batch di halaman ini: tanggal mutasi pertama paling awal dulu,
+      // lalu batch tanpa mutasi (sampai cutoff) berdasarkan ED terdekat. Sebelumnya urut nomor batch.
+      (function () {
+        var tglPertama = {};
+        semuaTx.forEach(function (tx) {
+          if (!tx.batch || !tx.tanggal) return;
+          if (!tglPertama[tx.batch] || tx.tanggal < tglPertama[tx.batch]) tglPertama[tx.batch] = tx.tanggal;
+        });
+        batchObat.sort(function (a, b) {
+          var ta = tglPertama[a.id] || "", tb = tglPertama[b.id] || "";
+          if (!!ta !== !!tb) return ta ? -1 : 1;          // yang punya mutasi lebih dulu
+          if (ta !== tb) return ta < tb ? -1 : 1;          // mutasi pertama paling awal
+          var ea = a.expired_date || "9999", eb = b.expired_date || "9999";
+          if (ea !== eb) return ea < eb ? -1 : 1;          // lalu ED terdekat
+          return (a.nomor_batch || "").localeCompare(b.nomor_batch || "");
+        });
+      })();
+
       var itemIndex = {};
       soItems.forEach(function (si) { itemIndex[kunciItemSO(si)] = si; });
 
@@ -4550,8 +4568,18 @@
       })
     ]).then(function (hasil) {
       areaHasil.textContent = "";
-      var items = hasil[0].items;
+      var items = hasil[0].items.slice();
       var batchList = hasil[1].items;
+
+      // Hari yang sama: masuk dulu, baru keluar (supaya saldo berjalan tidak minus sementara),
+      // sama seperti urutan di detail obat SO. Selanjutnya urut id.
+      items.sort(function (a, c) {
+        var ta = (a.tanggal || "").slice(0, 10), tc = (c.tanggal || "").slice(0, 10);
+        if (ta !== tc) return ta < tc ? -1 : 1;
+        var ja = a.jenis === "masuk" ? 0 : 1, jc = c.jenis === "masuk" ? 0 : 1;
+        if (ja !== jc) return ja - jc;
+        return (a.id || "").localeCompare(c.id || "");
+      });
 
       if (!items.length) {
         areaHasil.appendChild(el("p", { class: "status-koneksi" }, "Belum ada transaksi untuk obat ini."));

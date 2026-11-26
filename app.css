@@ -1111,3 +1111,19 @@ tr.so-ditandai td:first-child { box-shadow: inset 3px 0 0 var(--koral); }
   html.tabel-penuh .tabel-gulir { overflow-x: auto; }
   html.tabel-penuh .so-inp-tabel, html.tabel-penuh .inp-fisik { height: 34px; }
 }
+
+/* Tabel riwayat transaksi SO di layar sempit (mode tabel): muat tanpa geser ke samping */
+@media (max-width: 720px) {
+  html.tabel-penuh .so-tx-tabel { table-layout: fixed; width: 100%; font-size: 11px; }
+  html.tabel-penuh .so-tx-tabel th, html.tabel-penuh .so-tx-tabel td { padding: 4px 2px; word-break: break-word; overflow-wrap: anywhere; vertical-align: top; }
+  html.tabel-penuh .so-tx-tabel th:nth-child(1) { width: 15%; }
+  html.tabel-penuh .so-tx-tabel th:nth-child(2) { width: 15%; }
+  html.tabel-penuh .so-tx-tabel th:nth-child(3) { width: 22%; }
+  html.tabel-penuh .so-tx-tabel th:nth-child(4), html.tabel-penuh .so-tx-tabel th:nth-child(5) { width: 10%; }
+  html.tabel-penuh .so-tx-tabel th:nth-child(6), html.tabel-penuh .so-tx-tabel th:nth-child(7) { width: 11%; }
+  html.tabel-penuh .so-tx-tabel th:nth-child(8) { width: 8%; }
+  html.tabel-penuh .so-tx-tabel .so-td-aksi { white-space: normal; display: table-cell; }
+  html.tabel-penuh .so-tx-tabel .so-td-aksi .btn { display: block; width: 100%; min-width: 0; padding: 2px 0; margin: 0 0 3px; font-size: 11px; line-height: 1.3; }
+  html.tabel-penuh .so-tx-tabel .so-inp-tabel, html.tabel-penuh .so-tx-tabel .so-pilih-mutasi { width: 100%; max-width: 100%; min-width: 0; font-size: 11px; height: 28px; padding: 0 2px; }
+  html.tabel-penuh .so-tx-tabel .so-inp-jumlah-tabel { width: 100%; }
+}
