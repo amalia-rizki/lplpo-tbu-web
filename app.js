@@ -3130,6 +3130,45 @@
     });
   }
 
+  // Batch yang ikut dibandingkan di tab 2 tapi tidak punya stok_cutoff tersimpan (mis. batch sudah ED,
+  // fisik dianggap 0 tanpa item SO): hitung stok sistem dari mutasi s.d. cutoff, simpan di b._sistemHit.
+  // Menghindari pemakaian batch.stok_sistem live yang bisa usang.
+  function hitungSistemTanpaItem(semuaBatch, soItems, cutoff) {
+    var ada = {};
+    soItems.forEach(function (si) {
+      if (si.batch && si.stok_cutoff !== null && si.stok_cutoff !== undefined && si.stok_cutoff !== "") ada[si.batch] = true;
+    });
+    var punyaItem = {};
+    soItems.forEach(function (si) { if (si.batch) punyaItem[si.batch] = true; });
+    // Hanya batch yang ikut dibandingkan: sudah punya item SO, atau sudah ED (fisik dianggap 0)
+    var perlu = semuaBatch.filter(function (b) {
+      return !b._tanpa && !ada[b.id] && (punyaItem[b.id] || edLewat(b.expired_date));
+    });
+    if (!perlu.length) return Promise.resolve();
+    var sisa = {};
+    perlu.forEach(function (b) { sisa[b.id] = Number(b.stok_awal) || 0; });
+    var potong = [];
+    for (var i = 0; i < perlu.length; i += 25) potong.push(perlu.slice(i, i + 25));
+    return antrianSeri(potong.map(function (grup) {
+      return function () {
+        var f = grup.map(function (b) { return 'batch = "' + b.id + '"'; }).join(" || ");
+        return daftarSemua("mutasi", {
+          perPage: 500, sort: "tanggal,id",
+          filter: '(' + f + ') && tanggal <= "' + cutoff + '"',
+          fields: "id,batch,jenis,jumlah"
+        }).then(function (dm) {
+          dm.items.forEach(function (tx) {
+            if (!(tx.batch in sisa)) return;
+            var j = Number(tx.jumlah) || 0;
+            sisa[tx.batch] += (tx.jenis === "masuk") ? j : -j;
+          });
+        });
+      };
+    })).then(function () {
+      perlu.forEach(function (b) { b._sistemHit = sisa[b.id]; });
+    });
+  }
+
   // tahapSesuaikan: daftar per-item (satu baris = satu obat)
   function tahapSesuaikan(area, soId) {
     area.textContent = "";
@@ -3145,6 +3184,8 @@
         h.push(tanpa);
         return h;
       });
+    }).then(function (hasil) {
+      return hitungSistemTanpaItem(hasil[0].items, hasil[1].items, hasil[3]).then(function () { return hasil; });
     }).then(function (hasil) {
       var semuaBatch = hasil[0].items.concat(hasil[4]); // batch nyata + baris virtual "Tanpa batch"
       var soItems = hasil[1].items;
@@ -3167,6 +3208,8 @@
         var si = itemIndex[b.id];
         if (si && si.stok_cutoff !== null && si.stok_cutoff !== undefined && si.stok_cutoff !== "") {
           b._stok_sistem = Number(si.stok_cutoff);
+        } else if (b._sistemHit !== undefined) {
+          b._stok_sistem = b._sistemHit;
         } else {
           b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
         }
@@ -3482,7 +3525,14 @@
         if (si && si.stok_cutoff !== null && si.stok_cutoff !== undefined && si.stok_cutoff !== "") {
           b._stok_sistem = Number(si.stok_cutoff);
         } else {
-          b._stok_sistem = (b.stok_sistem !== null && b.stok_sistem !== undefined) ? b.stok_sistem : (b.stok_awal || 0);
+          // Tanpa item SO: hitung dari mutasi s.d. cutoff (bukan batch.stok_sistem live yang bisa usang)
+          var sisaHit = Number(b.stok_awal) || 0;
+          semuaTx.forEach(function (tx) {
+            if (tx.batch !== b.id) return;
+            var jm = Number(tx.jumlah) || 0;
+            sisaHit += (tx.jenis === "masuk") ? jm : -jm;
+          });
+          b._stok_sistem = sisaHit;
         }
       });
 
@@ -3660,9 +3710,11 @@
           indRecalc.className = "so-ind so-ind-ok";
           tombolRecalc.disabled = false;
           renderDetailItem(area, soId, obatId, soTanggal);
-        }, function () {
+        }, function (err) {
           indRecalc.className = "so-ind so-ind-err";
           tombolRecalc.disabled = false;
+          pesanTxGlobal.textContent = "Gagal menyimpan stok cutoff: " + ((err && (err.pesan || err.message)) || "kesalahan tidak diketahui");
+          pesanTxGlobal.hidden = false;
         });
       });
 
