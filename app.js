@@ -3435,7 +3435,7 @@
       return akhir.getFullYear() + "-" + String(akhir.getMonth() + 1).padStart(2, "0") + "-" + String(akhir.getDate()).padStart(2, "0") + " 23:59:59";
     })(soTanggal);
 
-    var filterMutasi = 'obat = "' + obatId + '" && status = "confirmed" && tanggal <= "' + cutoff + '"';
+    var filterMutasi = 'obat = "' + obatId + '" && tanggal <= "' + cutoff + '"';
 
     Promise.all([
       LPLPO.daftar("daftar_obat", { filter: 'id = "' + obatId + '"', perPage: 1 }),
@@ -4597,7 +4597,7 @@
       daftarSemua("mutasi", {
         perPage: 200,
         sort: "tanggal,id",
-        filter: 'obat = "' + obat.id + '" && status = "confirmed"',
+        filter: 'obat = "' + obat.id + '"',
         expand: "unit,batch"
       }),
       daftarSemua("batch", {
